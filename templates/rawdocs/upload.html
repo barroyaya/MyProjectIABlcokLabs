@@ -1,15 +1,153 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Importer un PDF</title>
-</head>
-<body>
-  <h1>Importer un PDF par URL</h1>
-  <form method="post">
+{% extends "base.html" %}
+{% block title %}Importer un PDF - RawDocs{% endblock %}
+
+{% block content %}
+<section class="card">
+  <h2>
+    <i class="fas fa-cloud-upload-alt"></i>
+    Importer un PDF
+  </h2>
+
+  <div class="upload-description">
+    <p>Importez votre document PDF en fournissant son URL. Les métadonnées seront automatiquement extraites et le document sera affiché pour consultation.</p>
+  </div>
+
+  <form method="post" novalidate class="upload-form">
     {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Télécharger</button>
+
+    <div class="form-group">
+      <label for="{{ form.pdf_url.id_for_label }}">
+        <i class="fas fa-link"></i>
+        {{ form.pdf_url.label }}
+      </label>
+      <div class="input-container">
+        {{ form.pdf_url }}
+        <div class="input-icon">
+          <i class="fas fa-globe"></i>
+        </div>
+      </div>
+      {% if form.pdf_url.errors %}
+        {% for err in form.pdf_url.errors %}
+          <div class="error">
+            <i class="fas fa-exclamation-triangle"></i>
+            {{ err }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn">
+        <i class="fas fa-download"></i>
+        Télécharger et analyser
+      </button>
+    </div>
   </form>
-</body>
-</html>
+
+  <div class="upload-info">
+    <h3><i class="fas fa-info-circle"></i> Informations</h3>
+    <div class="info-grid">
+      <div class="info-item">
+        <i class="fas fa-check-circle"></i>
+        <span>Formats supportés : PDF uniquement</span>
+      </div>
+      <div class="info-item">
+        <i class="fas fa-shield-alt"></i>
+        <span>Extraction automatique des métadonnées</span>
+      </div>
+      <div class="info-item">
+        <i class="fas fa-eye"></i>
+        <span>Visualisation intégrée du document</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+.upload-description {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f7fa 100%);
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+  border-left: 4px solid var(--primary-color);
+}
+
+.upload-description p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.upload-form {
+  margin-bottom: 2rem;
+}
+
+.form-group {
+  position: relative;
+}
+
+.input-container {
+  position: relative;
+}
+
+.input-container .input {
+  padding-left: 3rem;
+}
+
+.input-icon {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.upload-info {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 1.5rem;
+  border: 1px solid var(--border-color);
+}
+
+.upload-info h3 {
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.info-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.info-item i {
+  color: var(--success-color);
+  width: 16px;
+}
+
+@media (max-width: 768px) {
+  .form-actions {
+    justify-content: stretch;
+  }
+
+  .upload-description {
+    padding: 1rem;
+  }
+}
+</style>
+{% endblock %}
