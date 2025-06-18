@@ -1,0 +1,42 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}RawDocs{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'rawdocs/css/styles.css' %}">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <header class="site-header">
+      <div class="header-content">
+        <a href="{% url 'rawdocs:upload' %}" class="logo">
+          <i class="fas fa-file-pdf"></i>
+          <span>RawDocs</span>
+        </a>
+        <nav class="nav-menu">
+          <a href="{% url 'rawdocs:upload' %}" class="nav-link">
+            <i class="fas fa-upload"></i>
+            Importer
+          </a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="site-main">
+      <div class="main-content">
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-content">
+        <p>&copy; 2024 RawDocs - Gestionnaire de documents PDF</p>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>
