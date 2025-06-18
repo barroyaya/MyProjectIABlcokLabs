@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Succès</title></head>
+<body>
+  <h1>PDF téléchargé avec succès !</h1>
+  <p>ID : {{ doc.id }}</p>
+  <p>URL source : <a href="{{ doc.url }}">{{ doc.url }}</a></p>
+  <p>Fichier : <a href="{{ doc.file.url }}">{{ doc.file.name }}</a></p>
+</body>
+</html>
