@@ -1,61 +1,116 @@
-# rawdocs/utils.py
-import json
+import re
+import requests
 from PyPDF2 import PdfReader
 from langdetect import detect
 from urllib.parse import urlparse
 
-def extract_metadata(file_path, source_url):
+# URL de votre service Ollama/Mistral
+OLLAMA_URL = "http://localhost:11434"
+
+# Stopwords FR/EN basiques
+STOPWORDS = {
+    "le","la","les","de","des","du","un","une","et","en","à","dans","que","qui",
+    "pour","par","sur","avec","au","aux","ce","ces","se","ses","est",
+    "the","and","of","to","in","that","it","is","was","for","on","are","with",
+    "as","I","at","be","by","this"
+}
+
+def call_mistral(prompt: str, max_tokens: int = 200000) -> str:
+    try:
+        resp = requests.post(
+            f"{OLLAMA_URL}/v1/completions/mistral",
+            json={"prompt": prompt, "max_tokens": max_tokens, "temperature": 0.0},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"].strip()
+    except Exception:
+        return ""
+
+def extract_full_text(file_path: str) -> str:
     reader = PdfReader(file_path)
-    info = reader.metadata or {}
+    raw = []
+    for page in reader.pages:
+        raw.append(page.extract_text() or "")
+    text = "\n".join(raw)
+    # nettoyage basique
+    text = re.sub(r"[^0-9A-Za-zÀ-ÖØ-öø-ÿ\s\.,;:\-'\(\)]", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    # retirer stopwords
+    words = text.split()
+    return " ".join(w for w in words if w.lower() not in STOPWORDS)
 
-    # 1) Métadonnées internes PDF
-    title = info.title or ''
-    date  = info.creation_date or ''
-
-    # 2) Version du PDF (header)
+def extract_metadonnees(file_path: str, source_url: str) -> dict:
+    reader = PdfReader(file_path)
+    info    = reader.metadata or {}
+    # PDF interne
+    title   = info.title or ""
     version = getattr(reader, "pdf_header_version", "")
 
-    # 3) Détection de la langue sur les premières pages
-    text = ""
-    for page in reader.pages[:3]:
-        text += page.extract_text() or ""
+    # texte complet nettoyé
+    full_text = extract_full_text(file_path)
+
+    # détection langue
     try:
-        language = detect(text)
+        language = detect(full_text)
     except:
         language = ""
 
-    # 4) Pays — on le déduit du TLD du domaine source
-    domain = urlparse(source_url).netloc
-    tld = domain.split('.')[-1]
-    country = tld.upper() if len(tld) == 2 else ''
+    # pays via TLD
+    domain  = urlparse(source_url).netloc
+    tld     = domain.split(".")[-1]
+    country = tld.upper() if len(tld) == 2 else ""
+
+    # URL brute
+    url_source = source_url
+
+    # prompts détaillés
+    # 1) Type de document
+    prompt_type = (
+        "Tu es un métadonneur expert. En te basant sur le texte qui suit, "
+        "détermine s'il s'agit d'un « Rapport » ou d'un « Contrat ». "
+        "Réponds uniquement par Rapport ou Contrat.\n\n"
+        f"{full_text[:5000]}"
+    )
+    doc_type = call_mistral(prompt_type)
+
+    # 2) Date de publication
+    match = re.search(r"(?i)(?:Publié\s+le|Publication\s*[:\-]?)\s*([0-3]?\d\s+\w+\s+\d{4})", full_text)
+    if match:
+        date_pub = match.group(1)
+    else:
+        prompt_date = (
+            "Tu es un métadonneur. Extrait la date de publication (ex. « 12 mai 2023 ») "
+            "du texte suivant ou renvoie une chaîne vide.\n\n"
+            f"{full_text[:5000]}"
+        )
+        date_pub = call_mistral(prompt_date)
+
+    # 3) Source interne (EMA/FDA…)
+    prompt_source = (
+        "Tu es un métadonneur. Quelle entité est citée comme source (ex. EMA, FDA, etc.) ? "
+        "Réponds uniquement par le nom ou renvoie vide si aucune.\n\n"
+        f"{full_text[:5000]}"
+    )
+    source_name = call_mistral(prompt_source)
+
+    # 4) Contexte / résumé
+    prompt_context = (
+        "Tu es un métadonneur. Fournis un bref résumé du contexte et de l’objectif de ce document "
+        "en te basant sur son contenu.\n\n"
+        f"{full_text[:10000]}"
+    )
+    context = call_mistral(prompt_context)
 
     return {
-        "title":    title,
-        "date":     date,
-        "language": language,
-        "country":  country,
-        "source":   source_url,
-        "version":  version,
+        "title":            title,
+        "type":             doc_type,
+        "language":         language,
+        "version":          version,
+        "url_source":       url_source,
+        "source":           source_name,
+        "publication_date": date_pub,
+        "context":          context,
+        "country":          country,
     }
-
-
-import requests
-
-OLLAMA_URL = "http://localhost:11434"
-
-def call_mistral(prompt: str, max_tokens: int = 200000) -> str:
-    """
-    Envoie un prompt à Mistral via Ollama et renvoie la réponse textuelle.
-    """
-    resp = requests.post(
-        f"{OLLAMA_URL}/v1/completions/mistral",
-        json={
-            "prompt": prompt,
-            "max_tokens": max_tokens,
-            "temperature": 0.0,
-        }
-    )
-    resp.raise_for_status()
-    # Selon la version de l’API Ollama, le champ peut être 'choices'[0]['message']['content']
-    data = resp.json()
-    return data["choices"][0]["message"]["content"]

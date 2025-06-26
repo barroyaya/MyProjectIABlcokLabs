@@ -192,13 +192,18 @@ body {
 }
 .hero-cta {
   display: inline-block;
-  padding: .75rem 1.5rem;
+  padding: 0.5rem 0.75rem;   /* 0.5rem en haut/bas, 0.75rem à gauche/droite */
+  font-size: 0.875rem;
   border: 2px solid var(--primary-color);
   border-radius: var(--border-radius);
   color: var(--primary-color);
   text-decoration: none;
   transition: var(--transition-all);
+  line-height: 1;
+  max-width: 150px;          /* optionnel : limite la largeur */
+  text-align: center;        /* pour centrer le texte si max-width est atteint */
 }
+
 .hero-cta:hover {
   background: var(--primary-color);
   color: #fff;
@@ -244,4 +249,107 @@ body {
 }
 .auth-footer .footer-bottom {
   text-align: center; margin-top: 1rem; font-size: .875rem; opacity: .8;
+}
+
+/* static/rawdocs/css/styles.css */
+
+/* … vos styles précédents jusqu’à .auth-footer … */
+
+/* -----------------------------------------------------------------------
+   == Styles GLOBAUX POUR LOGIN & REGISTER ==============================
+   ----------------------------------------------------------------------- */
+
+/* Formulaire : groupe de champ */
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+/* Champs texte / select */
+.input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--border-color);
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  transition: var(--transition-all);
+  font-family: inherit;
+  margin-top: 0.5rem;
+  background: var(--surface-color);
+  color: var(--text-main);
+}
+.input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: var(--shadow-md);
+}
+
+/* Boutons principaux */
+.btn {
+  background: var(--primary-color);
+  color: #fff;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition-all);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.btn:hover {
+  background: var(--primary-hover);
+  box-shadow: var(--shadow-md);
+}
+.btn:focus {
+  outline: none;
+}
+
+/* Boutons secondaires */
+.btn-outline {
+  background: transparent;
+  color: var(--primary-color);
+  border: 2px solid var(--primary-color);
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition-all);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.btn-outline:hover {
+  background: var(--primary-color);
+  color: #fff;
+  box-shadow: var(--shadow-md);
+}
+.btn-outline:focus {
+  outline: none;
+}
+
+/* Flash messages (erreurs, succès…) */
+.messages {
+  list-style: none;
+  margin-bottom: 1rem;
+  padding: 0;
+}
+.messages li {
+  background: rgb(220 38 38 / 0.1);
+  color: var(--error-color);
+  padding: 0.75rem 1rem;
+  border-left: 4px solid var(--error-color);
+  border-radius: var(--border-radius);
+  margin-bottom: 0.5rem;
+}
+
+/* Pour d’éventuelles classes d’erreur inline */
+.error {
+  color: var(--error-color);
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
 }
