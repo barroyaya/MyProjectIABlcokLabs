@@ -1,116 +1,136 @@
 import re
-import requests
-from PyPDF2 import PdfReader
-from langdetect import detect
+from pathlib import Path
 from urllib.parse import urlparse
 
-# URL de votre service Ollama/Mistral
-OLLAMA_URL = "http://localhost:11434"
+import spacy
+from PyPDF2 import PdfReader
+from langdetect import detect
 
-# Stopwords FR/EN basiques
+# Chargez une fois :
+#   python -m spacy download fr_core_news_sm
+#   python -m spacy download en_core_web_sm
+NLP_FR = spacy.load("fr_core_news_sm")
+NLP_EN = spacy.load("en_core_web_sm")
+
+# Stopwords FR/EN basiques pour nettoyage
 STOPWORDS = {
     "le","la","les","de","des","du","un","une","et","en","à","dans","que","qui",
     "pour","par","sur","avec","au","aux","ce","ces","se","ses","est",
     "the","and","of","to","in","that","it","is","was","for","on","are","with",
-    "as","I","at","be","by","this"
+    "as","i","at","be","by","this"
 }
 
-def call_mistral(prompt: str, max_tokens: int = 200000) -> str:
-    try:
-        resp = requests.post(
-            f"{OLLAMA_URL}/v1/completions/mistral",
-            json={"prompt": prompt, "max_tokens": max_tokens, "temperature": 0.0},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data["choices"][0]["message"]["content"].strip()
-    except Exception:
-        return ""
+# Patterns réduits pour l'exemple (à enrichir si besoin)
+TITLE_PATTERNS = [
+    r'^(?:guideline|guide|procedure|regulation|directive|report)[^\n]{5,150}',
+    r'^[A-Z][A-Za-z0-9\s\-–—(),]{20,150}\b'
+]
+DATE_PATTERNS = [
+    r'(?i)(?:Publié\s+le|Publication\s*[:\-]?)\s*([0-3]?\d\s+\w+\s+\d{4})',
+    r'\b(\d{4}-\d{2}-\d{2})\b'
+]
+VERSION_PATTERNS = [
+    r'\bversion\s*[:\-]?\s*([\d\.]+)\b',
+    r'\bv([\d\.]+)\b'
+]
+# Sources clés pour l'exemple
+SOURCE_PATTERNS = {
+    'EMA': [r'\bEMA\b', r'\beuropean medicines agency\b'],
+    'FDA': [r'\bFDA\b', r'\bfood and drug administration\b'],
+}
+DOCUMENT_TYPE_PATTERNS = {
+    'guideline': [r'\bguideline\b', r'\bguide\b'],
+    'procedure': [r'\bprocedure\b'],
+    'report':    [r'\breport\b']
+}
+COUNTRY_TLD = lambda url: urlparse(url).netloc.split('.')[-1].upper()
 
 def extract_full_text(file_path: str) -> str:
+    """Lit tout le PDF, nettoie et enlève les stopwords."""
     reader = PdfReader(file_path)
-    raw = []
-    for page in reader.pages:
-        raw.append(page.extract_text() or "")
-    text = "\n".join(raw)
-    # nettoyage basique
+    pages = [p.extract_text() or "" for p in reader.pages]
+    text = " ".join(pages)
     text = re.sub(r"[^0-9A-Za-zÀ-ÖØ-öø-ÿ\s\.,;:\-'\(\)]", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
-    # retirer stopwords
     words = text.split()
     return " ".join(w for w in words if w.lower() not in STOPWORDS)
 
 def extract_metadonnees(file_path: str, source_url: str) -> dict:
     reader = PdfReader(file_path)
     info    = reader.metadata or {}
-    # PDF interne
     title   = info.title or ""
     version = getattr(reader, "pdf_header_version", "")
 
-    # texte complet nettoyé
     full_text = extract_full_text(file_path)
 
-    # détection langue
+    # 1) Langue & spaCy
     try:
-        language = detect(full_text)
+        lang = detect(full_text)
     except:
-        language = ""
+        lang = "fr"
+    nlp = NLP_EN if lang.startswith("en") else NLP_FR
+    doc = nlp(full_text)
 
-    # pays via TLD
-    domain  = urlparse(source_url).netloc
-    tld     = domain.split(".")[-1]
-    country = tld.upper() if len(tld) == 2 else ""
+    # 2) Titre via patterns
+    extracted_title = ""
+    for pat in TITLE_PATTERNS:
+        m = re.search(pat, full_text, re.IGNORECASE | re.MULTILINE)
+        if m:
+            extracted_title = m.group(0).strip()
+            break
+    if not extracted_title:
+        extracted_title = title or Path(file_path).stem
 
-    # URL brute
-    url_source = source_url
+    # 3) Date de publication via patterns
+    publication_date = ""
+    for pat in DATE_PATTERNS:
+        m = re.search(pat, full_text, re.IGNORECASE)
+        if m:
+            publication_date = m.group(1) if m.groups() else m.group(0)
+            break
 
-    # prompts détaillés
-    # 1) Type de document
-    prompt_type = (
-        "Tu es un métadonneur expert. En te basant sur le texte qui suit, "
-        "détermine s'il s'agit d'un « Rapport » ou d'un « Contrat ». "
-        "Réponds uniquement par Rapport ou Contrat.\n\n"
-        f"{full_text[:5000]}"
-    )
-    doc_type = call_mistral(prompt_type)
+    # 4) Version via patterns
+    extracted_version = ""
+    for pat in VERSION_PATTERNS:
+        m = re.search(pat, full_text, re.IGNORECASE)
+        if m:
+            extracted_version = m.group(1)
+            break
 
-    # 2) Date de publication
-    match = re.search(r"(?i)(?:Publié\s+le|Publication\s*[:\-]?)\s*([0-3]?\d\s+\w+\s+\d{4})", full_text)
-    if match:
-        date_pub = match.group(1)
+    # 5) Source interne via ORG ou patterns
+    orgs = [ent.text for ent in doc.ents if ent.label_ == "ORG"]
+    if orgs:
+        source_interne = orgs[0]
     else:
-        prompt_date = (
-            "Tu es un métadonneur. Extrait la date de publication (ex. « 12 mai 2023 ») "
-            "du texte suivant ou renvoie une chaîne vide.\n\n"
-            f"{full_text[:5000]}"
-        )
-        date_pub = call_mistral(prompt_date)
+        source_interne = ""
+        for name, pats in SOURCE_PATTERNS.items():
+            if any(re.search(p, full_text, re.IGNORECASE) for p in pats):
+                source_interne = name
+                break
 
-    # 3) Source interne (EMA/FDA…)
-    prompt_source = (
-        "Tu es un métadonneur. Quelle entité est citée comme source (ex. EMA, FDA, etc.) ? "
-        "Réponds uniquement par le nom ou renvoie vide si aucune.\n\n"
-        f"{full_text[:5000]}"
-    )
-    source_name = call_mistral(prompt_source)
+    # 6) Type de document via patterns
+    doc_type = "autres"
+    for t, pats in DOCUMENT_TYPE_PATTERNS.items():
+        if any(re.search(p, full_text, re.IGNORECASE) for p in pats):
+            doc_type = t
+            break
 
-    # 4) Contexte / résumé
-    prompt_context = (
-        "Tu es un métadonneur. Fournis un bref résumé du contexte et de l’objectif de ce document "
-        "en te basant sur son contenu.\n\n"
-        f"{full_text[:10000]}"
-    )
-    context = call_mistral(prompt_context)
+    # 7) Contexte : deux premières phrases spaCy
+    sents = list(doc.sents)
+    context = " ".join([s.text for s in sents[:2]]).strip()
+
+    # 8) Pays via TLD
+    tld = COUNTRY_TLD(source_url)
+    country = tld if len(tld) == 2 else ""
 
     return {
-        "title":            title,
-        "type":             doc_type,
-        "language":         language,
-        "version":          version,
-        "url_source":       url_source,
-        "source":           source_name,
-        "publication_date": date_pub,
+        "title":            extracted_title,
+        "type":             doc_type.capitalize(),
+        "language":         lang,
+        "version":          extracted_version,
+        "url_source":       source_url,
+        "source":           source_interne,
+        "publication_date": publication_date,
         "context":          context,
         "country":          country,
     }

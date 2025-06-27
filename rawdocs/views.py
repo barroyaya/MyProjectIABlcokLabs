@@ -6,9 +6,9 @@ from django.core.files.base import ContentFile
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth        import authenticate, login
 
-from .models   import RawDocument
-from .forms    import URLForm, RegisterForm
-from .utils    import extract_metadonnees, extract_full_text
+from .models import RawDocument
+from .forms  import URLForm, RegisterForm
+from .utils  import extract_metadonnees, extract_full_text
 
 def is_metadonneur(user):
     return user.groups.filter(name="Metadonneur").exists()
@@ -24,15 +24,15 @@ def upload_pdf(request):
         resp = requests.get(url)
         resp.raise_for_status()
 
-        # sauvegarde du PDF
+        # Sauvegarde du PDF
         ts       = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = os.path.basename(url)
         rd = RawDocument(url=url, owner=request.user)
         rd.file.save(os.path.join(ts, filename), ContentFile(resp.content))
         rd.save()
 
-        # extraction métadonnées & texte complet
-        metadata      = extract_metadonnees(rd.file.path, rd.url)
+        # Extraction sans IA
+        metadata       = extract_metadonnees(rd.file.path, rd.url)
         extracted_text = extract_full_text(rd.file.path)
 
         context.update({
@@ -42,7 +42,6 @@ def upload_pdf(request):
         })
 
     return render(request, 'rawdocs/upload.html', context)
-
 
 def register(request):
     if request.method == 'POST':
