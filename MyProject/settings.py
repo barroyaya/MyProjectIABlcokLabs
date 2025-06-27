@@ -106,7 +106,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 # Auth redirects
 LOGIN_URL          = '/'
-LOGIN_REDIRECT_URL = '/upload/'
+LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL= '/'
 
 
