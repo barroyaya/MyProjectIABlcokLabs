@@ -1,106 +1,83 @@
 {% extends 'base.html' %}
+{% block title %}Édition des métadonnées – RawDocs{% endblock %}
+
 {% block content %}
+{# 1) LLM Quality moved here #}
+{% if metadata.quality %}
+<section class="card quality-card">
+  <h3>
+    <i class="fas fa-brain"></i>
+    Qualité d'Extraction LLM
+    {% if metadata.quality.llm_powered %}
+      <span class="llm-badge">AI-Powered</span>
+    {% else %}
+      <span class="basic-badge">Basic</span>
+    {% endif %}
+  </h3>
 
-<style>
-  .container {
-    max-width: 850px;
-    margin: 2rem auto;
-    padding: 2rem;
-    background-color: #fff;
-    border-radius: 12px;
-    box-shadow: 0 0 12px rgba(0,0,0,0.08);
-    font-family: sans-serif;
-  }
+  <div class="quality-overview">
+    <div class="extraction-rate">
+      <div class="rate-label">Taux d'extraction:</div>
+      <div class="rate-value">{{ metadata.quality.extraction_rate }}%</div>
+      <div class="rate-bar">
+        <div class="rate-fill" style="width: {{ metadata.quality.extraction_rate }}%"></div>
+      </div>
+    </div>
 
-  h2 {
-    font-size: 1.5rem;
-    margin-bottom: 0.5rem;
-    color: #333;
-  }
+    <div class="fields-extracted">
+      <span class="fields-label">Champs extraits automatiquement:</span>
+      <div class="field-badges">
+        {% for field, score in metadata.quality.field_scores.items %}
+          {% if score >= 70 %}
+            <span class="field-badge excellent">{{ field|title }}</span>
+          {% elif score >= 50 %}
+            <span class="field-badge good">{{ field|title }}</span>
+          {% elif score >= 20 %}
+            <span class="field-badge poor">{{ field|title }}</span>
+          {% else %}
+            <span class="field-badge missing">{{ field|title }}</span>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
 
-  p {
-    font-size: 0.9rem;
-    color: #666;
-  }
+    <div class="confidence-scores">
+      <div class="scores-label">Scores de confiance LLM:</div>
+      {% for field, score in metadata.quality.field_scores.items %}
+      <div class="score-item">
+        <div class="score-details">
+          <span class="score-name">{{ field|title }}:</span>
+          {% if metadata.quality.extraction_reasoning %}
+            <span class="score-reasoning">
+              {% for rf, txt in metadata.quality.extraction_reasoning.items %}
+                {% if rf == field %}{{ txt }}{% endif %}
+              {% endfor %}
+            </span>
+          {% endif %}
+        </div>
+        <div class="score-container">
+          <span class="score-value" style="color:
+            {% if score >= 80 %}#10b981{% elif score >= 50 %}#f59e0b{% else %}#ef4444{% endif %}">
+            {{ score }}%
+          </span>
+          <div class="mini-bar">
+            <div class="mini-fill" style="width: {{ score }}%;
+              background:
+              {% if score >= 80 %}#10b981{% elif score >= 50 %}#f59e0b{% else %}#ef4444{% endif %};">
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
 
-  .success {
-    background-color: #d4edda;
-    color: #155724;
-    padding: 0.75rem 1rem;
-    border-radius: 6px;
-    margin-bottom: 1.5rem;
-  }
-
-  form label {
-    display: block;
-    margin-bottom: 0.25rem;
-    font-weight: bold;
-    color: #444;
-  }
-
-  form input,
-  form textarea,
-  form select {
-    width: 100%;
-    padding: 0.5rem;
-    margin-bottom: 1rem;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    font-size: 0.95rem;
-  }
-
-  .form-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem 2rem;
-  }
-
-  button {
-    background-color: #007bff;
-    color: white;
-    border: none;
-    padding: 0.6rem 1.2rem;
-    font-size: 1rem;
-    border-radius: 6px;
-    cursor: pointer;
-  }
-
-  button:hover {
-    background-color: #0056b3;
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 2rem;
-  }
-
-  table th, table td {
-    border: 1px solid #ddd;
-    padding: 0.75rem;
-    text-align: left;
-    font-size: 0.9rem;
-  }
-
-  table thead {
-    background-color: #f0f0f0;
-  }
-
-  table tbody tr:nth-child(even) {
-    background-color: #fafafa;
-  }
-
-  .empty-message {
-    text-align: center;
-    color: #888;
-    padding: 1rem;
-  }
-</style>
-
+{# 2) Metadata edit form + history #}
 <div class="container">
-
   <h2>📝 Édition des métadonnées</h2>
-  <p><strong>Fichier :</strong> {{ doc.file.name }}</p>
+  <p><strong>Fichier :</strong> {{ doc.basename }}</p>
 
   {% if success %}
     <div class="success">✅ Les modifications ont été enregistrées avec succès.</div>
@@ -113,17 +90,18 @@
         <div>
           <label for="{{ field.id_for_label }}">{{ field.label }}</label>
           {% if field.name == 'publication_date' %}
-            <input type="text" name="{{ field.name }}" value="{{ field.value|default_if_none:'' }}" />
+            <input type="text" name="{{ field.name }}"
+                   value="{{ field.value|default_if_none:'' }}" />
           {% else %}
             {{ field }}
           {% endif %}
         </div>
       {% endfor %}
     </div>
-    <button type="submit"> Enregistrer les modifications</button>
+    <button type="submit">Enregistrer les modifications</button>
   </form>
 
-  <h3 style="margin-top: 3rem;"> Historique des modifications</h3>
+  <h3 style="margin-top: 3rem;">Historique des modifications</h3>
   <table>
     <thead>
       <tr>
@@ -145,12 +123,104 @@
         </tr>
       {% empty %}
         <tr>
-          <td colspan="5" class="empty-message">Aucune modification enregistrée.</td>
+          <td colspan="5" class="empty-message">
+            Aucune modification enregistrée.
+          </td>
         </tr>
       {% endfor %}
     </tbody>
   </table>
-
 </div>
 
+<style>
+/* —— REAL LLM Quality Styles —— */
+.quality-card {
+  background: var(--surface-color);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-lg);
+  margin-bottom: 2rem;
+  border-left: 4px solid #8b5cf6;
+}
+.llm-badge {
+  background: linear-gradient(45deg, #8b5cf6, #06b6d4);
+  color: white;
+  padding: .25rem .75rem;
+  border-radius: 20px;
+  font-size: .75rem;
+  font-weight: 600;
+  margin-left: .5rem;
+}
+.basic-badge {
+  background: #6b7280;
+  color: white;
+  padding: .25rem .75rem;
+  border-radius: 20px;
+  font-size: .75rem;
+  margin-left: .5rem;
+}
+.quality-card h3 {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+}
+.quality-overview { display: flex; flex-direction: column; gap: 1rem; }
+.extraction-rate { text-align: center; }
+.rate-label { font-weight: 600; color: var(--text-primary); margin-bottom: .5rem; }
+.rate-value { font-size: 2.5rem; font-weight: 800; color: #8b5cf6; }
+.rate-bar { width: 100%; max-width: 300px; height: 12px; background: #e5e7eb; border-radius: 6px; margin: .5rem auto; overflow: hidden; }
+.rate-fill { height: 100%; background: linear-gradient(90deg,#8b5cf6,#06b6d4); transition: width .8s ease; }
+.field-badge { display: inline-block; padding:.25rem .5rem; margin:.25rem; border-radius:4px; font-size:.85rem; }
+.field-badge.excellent { background:#d1fae5;color:#047857;border:1px solid #10b981; }
+.field-badge.good      { background:#fef3c7;color:#92400e;border:1px solid #f59e0b; }
+.field-badge.poor      { background:#fed7d7;color:#c53030;border:1px solid #f56565; }
+.field-badge.missing   { background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db; }
+.confidence-scores     { background:var(--background-color); padding:1rem; border-radius:var(--border-radius); }
+.score-item { display:flex; justify-content:space-between; align-items:center; padding:.5rem 0; border-bottom:1px solid var(--border-color); }
+.score-details { flex:1; }
+.score-name { font-weight:600; color:var(--text-primary); display:block; }
+.score-reasoning { font-size:.8rem; color:var(--text-alt); font-style:italic; }
+.score-container { display:flex; align-items:center; gap:.5rem; min-width:100px; }
+.score-value { font-weight:700; min-width:40px; text-align:right; }
+.mini-bar { width:40px; height:6px; background:#e5e7eb; border-radius:3px; overflow:hidden; }
+.mini-fill { height:100%; border-radius:3px; transition:width .6s ease; }
+
+/* —— Edit Metadata form styles —— */
+.container {
+  max-width:850px; margin:2rem auto; padding:2rem;
+  background:#fff; border-radius:12px; box-shadow:0 0 12px rgba(0,0,0,0.08);
+  font-family:sans-serif;
+}
+h2 { font-size:1.5rem; margin-bottom:.5rem; color:#333; }
+p { font-size:.9rem; color:#666; }
+.success {
+  background:#d4edda; color:#155724; padding:.75rem 1rem; border-radius:6px;
+  margin-bottom:1.5rem;
+}
+.form-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:1rem 2rem;
+}
+label { display:block; margin-bottom:.25rem; font-weight:bold; color:#444; }
+input, textarea, select {
+  width:100%; padding:.5rem; margin-bottom:1rem;
+  border:1px solid #ccc; border-radius:6px; font-size:.95rem;
+}
+button {
+  background:#007bff; color:#fff; border:none; padding:.6rem 1.2rem;
+  font-size:1rem; border-radius:6px; cursor:pointer;
+}
+button:hover { background:#0056b3; }
+
+table {
+  width:100%; border-collapse:collapse; margin-top:2rem;
+}
+th, td { border:1px solid #ddd; padding:.75rem; text-align:left; font-size:.9rem; }
+thead { background:#f0f0f0; }
+tbody tr:nth-child(even) { background:#fafafa; }
+.empty-message {
+  text-align:center; color:#888; padding:1rem;
+}
+</style>
 {% endblock %}

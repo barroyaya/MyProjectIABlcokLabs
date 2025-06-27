@@ -21,11 +21,10 @@ STOPWORDS = {
 }
 
 
-def call_mistral_extraction(text_chunk, document_url=""):
+def call_mistral_with_confidence(text_chunk, document_url=""):
     """
-    Uses Mistral AI for intelligent metadata extraction via direct API
+    Get extraction + confidence scores from Mistral in one call
     """
-    # 🔑 YOUR MISTRAL API KEY
     MISTRAL_API_KEY = "oKdjCl98ACUqpUc4TCyqcfZFMzNNdapl"
 
     try:
@@ -37,42 +36,63 @@ def call_mistral_extraction(text_chunk, document_url=""):
         }
 
         prompt = f"""
-        Analyze this document and extract metadata with MAXIMUM PRECISION:
+        You are an expert document analyzer. Analyze this document and extract metadata with confidence scores.
 
         DOCUMENT TEXT (first 2000 chars):
         {text_chunk[:2000]}
 
         SOURCE URL: {document_url}
 
-        TASK: Extract metadata and return ONLY a valid JSON object with these exact keys:
+        TASK: Return ONLY a JSON object with extracted metadata AND your confidence scores:
+
         {{
-            "title": "the ACTUAL document title from the text",
-            "type": "guideline|regulation|directive|report|procedure|standard|other - look in title/content",
-            "publication_date": "exact date from document (DD Month YYYY format)",
-            "version": "document version/revision if mentioned",
-            "source": "issuing organization like European Commission, EMA, FDA - check URL domain and text",
-            "context": "main domain/subject area (pharmaceutical, medical, legal, etc.)",
-            "country": "country code (EU, US, etc.)",
-            "language": "document language (en, fr, etc.)"
+            "metadata": {{
+                "title": "the ACTUAL document title",
+                "type": "guideline|regulation|directive|report|procedure|standard|other",
+                "publication_date": "exact date (DD Month YYYY format)",
+                "version": "document version/reference number",
+                "source": "EMA for European docs, FDA for US docs, or actual organization",
+                "context": "main domain (pharmaceutical, medical, legal, etc.)",
+                "country": "country code (EU, US, etc.)",
+                "language": "language code (en, fr, etc.)"
+            }},
+            "confidence_scores": {{
+                "title": 85,
+                "type": 90,
+                "publication_date": 95,
+                "version": 20,
+                "source": 90,
+                "context": 80,
+                "country": 95,
+                "language": 98
+            }},
+            "extraction_reasoning": {{
+                "title": "Found clear title in document header",
+                "type": "Document explicitly mentions 'guideline' in title",
+                "publication_date": "Date '24 November 2008' found in document text",
+                "version": "No clear version number found",
+                "source": "URL indicates European source, using EMA",
+                "context": "Multiple pharmaceutical terms detected",
+                "country": "URL domain .eu indicates European Union",
+                "language": "Text is clearly in English"
+            }}
         }}
 
         INSTRUCTIONS:
-        - For SOURCE: Look at URL '{document_url}' - if eur-lex.europa.eu then "European Commission"
-        - For TYPE: Look for words like "guideline", "regulation", "directive" in the title
-        - Extract exact publication date like "24 November 2008"
-        - Return ONLY the JSON object, no other text
+        - Confidence scores: 0-100 (0=not found, 50=uncertain, 100=completely certain)
+        - Give HONEST confidence scores based on text evidence
+        - If you're unsure about something, give it a low score (20-40)
+        - If clearly found in text, give high score (80-100)
+        - Provide reasoning for each extraction
+        - For SOURCE: Use EMA for European, FDA for US
+        - Return ONLY the JSON, no other text
         """
 
         data = {
             "model": "mistral-large-latest",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
+            "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.1,
-            "max_tokens": 500
+            "max_tokens": 800
         }
 
         response = requests.post(url, headers=headers, json=data, timeout=30)
@@ -81,18 +101,16 @@ def call_mistral_extraction(text_chunk, document_url=""):
             result = response.json()
             response_text = result['choices'][0]['message']['content']
 
-            # Try to parse JSON
             try:
-                # Find JSON in response (in case there's extra text)
+                # Find JSON in response
                 json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
                 if json_match:
                     json_str = json_match.group()
-                    metadata = json.loads(json_str)
-                    print("✅ Mistral extraction successful!")
-                    return metadata
+                    full_result = json.loads(json_str)
+                    print("✅ Mistral extraction with confidence successful!")
+                    return full_result
                 else:
                     print("❌ No JSON found in Mistral response")
-                    print(f"Raw response: {response_text}")
                     return None
             except json.JSONDecodeError as e:
                 print(f"❌ JSON parse error: {e}")
@@ -100,15 +118,42 @@ def call_mistral_extraction(text_chunk, document_url=""):
                 return None
         else:
             print(f"❌ Mistral API error: {response.status_code}")
-            print(f"Response: {response.text}")
             return None
 
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Request error: {e}")
-        return None
     except Exception as e:
         print(f"❌ Mistral API error: {e}")
         return None
+
+
+def calculate_overall_quality(confidence_scores):
+    """
+    Calculate overall extraction quality from LLM confidence scores
+    """
+    if not confidence_scores:
+        return 0
+
+    # Weight different fields by importance
+    weights = {
+        'title': 1.5,
+        'type': 1.2,
+        'publication_date': 1.3,
+        'source': 1.2,
+        'context': 1.0,
+        'language': 0.8,
+        'country': 0.8,
+        'version': 0.7
+    }
+
+    total_weighted_score = 0
+    total_weight = 0
+
+    for field, score in confidence_scores.items():
+        weight = weights.get(field, 1.0)
+        total_weighted_score += score * weight
+        total_weight += weight
+
+    overall_quality = int(total_weighted_score / total_weight) if total_weight > 0 else 0
+    return overall_quality
 
 
 def extract_full_text(file_path: str) -> str:
@@ -122,79 +167,106 @@ def extract_full_text(file_path: str) -> str:
     return " ".join(w for w in words if w.lower() not in STOPWORDS)
 
 
-def extract_basic_metadata(file_path: str, source_url: str) -> dict:
-    """Fallback basic extraction (your original code)"""
-    reader = PdfReader(file_path)
-    info = reader.metadata or {}
-    title = info.title or ""
-
-    full_text = extract_full_text(file_path)
-
-    # Basic language detection
-    try:
-        lang = detect(full_text)
-    except:
-        lang = "fr"
-
-    # Basic patterns (simplified)
-    extracted_title = title or Path(file_path).stem
-
-    # TLD-based country
-    tld = urlparse(source_url).netloc.split('.')[-1].upper()
-    country = tld if len(tld) == 2 else ""
-
-    return {
-        "title": extracted_title,
-        "document_type": "autres",
-        "publication_date": "",
-        "version": "",
-        "source_organization": "",
-        "context": "",
-        "country": country,
-        "language": lang,
-    }
-
-
 def extract_metadonnees(file_path: str, source_url: str) -> dict:
     """
-    Main extraction function - tries Mistral AI first, falls back to basic
+    Main extraction function with REAL LLM confidence metrics
     """
-    print("🔍 Starting metadata extraction...")
+    print("🔍 Starting LLM extraction with confidence scoring...")
 
     # Get full text for processing
     full_text = extract_full_text(file_path)
 
-    # Try Mistral AI extraction first
-    mistral_result = call_mistral_extraction(full_text, source_url)
+    # Get extraction + confidence from Mistral
+    llm_result = call_mistral_with_confidence(full_text, source_url)
 
-    if mistral_result:
-        print("✅ Using Mistral AI extraction")
+    if llm_result and 'metadata' in llm_result and 'confidence_scores' in llm_result:
+        print("✅ Using LLM extraction with real confidence scores!")
 
-        # Post-process to ensure consistent EMA for European docs
-        if mistral_result.get("source") in ["European Commission", "Commission", "EU Commission"]:
-            mistral_result["source"] = "EMA"
+        metadata = llm_result['metadata']
+        confidence_scores = llm_result['confidence_scores']
+        reasoning = llm_result.get('extraction_reasoning', {})
 
-        # If version is empty, try to extract from title or content
-        if not mistral_result.get("version"):
-            version_patterns = [
-                r'(\d{4}\s+C\s+\d+\s+\d+)',  # 2013 C 223 01
-                r'(v\d+\.\d+)',  # v1.0
-                r'(version\s+\d+)',  # version 1
-                r'(\d+/\d+/[A-Z]+)',  # regulatory patterns
-            ]
-            full_text_sample = text_chunk[:1000]  # First 1000 chars
-            for pattern in version_patterns:
-                match = re.search(pattern, full_text_sample, re.IGNORECASE)
-                if match:
-                    mistral_result["version"] = match.group(1)
-                    break
+        # Add URL source
+        metadata['url_source'] = source_url
 
-        # Add URL source to the result
-        mistral_result["url_source"] = source_url
-        return mistral_result
+        # Calculate overall quality from LLM scores
+        overall_quality = calculate_overall_quality(confidence_scores)
+
+        # Count extracted fields based on confidence
+        extracted_fields = sum(1 for score in confidence_scores.values() if score >= 50)
+        total_fields = len(confidence_scores)
+
+        # Build quality data with REAL LLM metrics
+        quality_data = {
+            'extraction_rate': overall_quality,
+            'field_scores': confidence_scores,
+            'extraction_reasoning': reasoning,
+            'extracted_fields': extracted_fields,
+            'total_fields': total_fields,
+            'llm_powered': True
+        }
+
+        metadata['quality'] = quality_data
+        return metadata
+
     else:
-        print("⚠️  Falling back to basic extraction")
-        # Use basic extraction as fallback
-        basic_result = extract_basic_metadata(file_path, source_url)
-        basic_result["url_source"] = source_url
-        return basic_result
+        print("⚠️  LLM extraction failed, using basic fallback")
+        # Fallback to basic extraction
+        return extract_basic_fallback(file_path, source_url)
+
+
+def extract_basic_fallback(file_path: str, source_url: str) -> dict:
+    """Basic fallback with honest low confidence scores"""
+    reader = PdfReader(file_path)
+    info = reader.metadata or {}
+    title = info.title or Path(file_path).stem
+
+    full_text = extract_full_text(file_path)
+
+    try:
+        lang = detect(full_text)
+    except:
+        lang = "en"
+
+    # Honest basic extraction with low confidence
+    basic_metadata = {
+        "title": title,
+        "type": "unknown",
+        "publication_date": "",
+        "version": "",
+        "source": "",
+        "context": "",
+        "country": "",
+        "language": lang,
+        "url_source": source_url
+    }
+
+    # Low confidence scores for basic extraction
+    confidence_scores = {
+        'title': 30 if title else 0,
+        'type': 0,
+        'publication_date': 0,
+        'version': 0,
+        'source': 0,
+        'context': 0,
+        'country': 0,
+        'language': 80 if lang else 0
+    }
+
+    overall_quality = calculate_overall_quality(confidence_scores)
+
+    quality_data = {
+        'extraction_rate': overall_quality,
+        'field_scores': confidence_scores,
+        'extraction_reasoning': {
+            'title': 'Basic PDF metadata extraction',
+            'type': 'Could not determine document type',
+            'source': 'No source identification possible'
+        },
+        'extracted_fields': 1,
+        'total_fields': 8,
+        'llm_powered': False
+    }
+
+    basic_metadata['quality'] = quality_data
+    return basic_metadata

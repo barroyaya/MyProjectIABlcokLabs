@@ -22,13 +22,13 @@ def is_metadonneur(user):
 @user_passes_test(is_metadonneur, login_url='rawdocs:login')
 def dashboard_view(request):
     documents = RawDocument.objects.filter(owner=request.user)
-    total_scrapped    = documents.count()
-    total_planned     = 150
-    total_completed   = 0    # à adapter si vous stockez un statut
-    total_rejected    = 0
+    total_scrapped        = documents.count()
+    total_planned         = 150
+    total_completed       = 0    # adapter si vous stockez un statut
+    total_rejected        = 0
     total_in_reextraction = 25
-    in_progress       = 12
-    rescrapping       = 3
+    in_progress           = 12
+    rescrapping           = 3
 
     context = {
         'total_scrapped':     total_scrapped,
@@ -63,6 +63,9 @@ def upload_pdf(request):
         rd = RawDocument(url=url, owner=request.user)
         rd.file.save(os.path.join(ts, filename), ContentFile(resp.content))
         rd.save()
+
+        # Exposer un attribut basename pour le template
+        rd.basename = os.path.basename(rd.file.name)
 
         # Extraction sans IA
         metadata       = extract_metadonnees(rd.file.path, rd.url)
@@ -99,6 +102,10 @@ def document_list(request):
     Affiche tous les RawDocument importés par l'utilisateur connecté.
     """
     documents = RawDocument.objects.filter(owner=request.user).order_by('-created_at')
+    # Prépare basename pour chaque document
+    for doc in documents:
+        doc.basename = os.path.basename(doc.file.name)
+
     return render(request, 'rawdocs/document_list.html', {
         'documents': documents
     })
@@ -134,6 +141,9 @@ def edit_metadata(request, doc_id):
     Affiche/traite le formulaire d'édition des métadonnées et journalise les modifications.
     """
     rd = get_object_or_404(RawDocument, id=doc_id, owner=request.user)
+    # Exposer basename pour le template
+    rd.basename = os.path.basename(rd.file.name)
+
     # On extrait à la volée pour afficher les valeurs courantes
     metadata = extract_metadonnees(rd.file.path, rd.url)
 

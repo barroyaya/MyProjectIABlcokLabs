@@ -1,9 +1,8 @@
-{# templates/rawdocs/upload.html #}
 {% extends "base.html" %}
 {% block title %}Importer un PDF – RawDocs{% endblock %}
 
 {% block content %}
-<!-- 1) Champ URL unique avec bouton “Entrer” -->
+<!-- 1) Upload Form -->
 <section class="upload-cell">
   <form method="post" class="upload-cell__form" novalidate>
     {% csrf_token %}
@@ -14,7 +13,7 @@
   </form>
 </section>
 
-<!-- 2) Carte Métadonnées si disponibles -->
+<!-- 2) Metadata Table -->
 {% if metadata %}
 <section class="card metadata-card">
   <h3><i class="fas fa-info-circle"></i> Métadonnées extraites</h3>
@@ -47,7 +46,7 @@
 </section>
 {% endif %}
 
-<!-- 3) Carte Texte extrait si disponible -->
+<!-- 3) Text Extract -->
 {% if extracted_text %}
 <section class="card text-card">
   <h3><i class="fas fa-file-alt"></i> Texte complet extrait</h3>
@@ -60,7 +59,7 @@
 </section>
 {% endif %}
 
-<!-- 4) Bouton pour accéder à la liste des documents -->
+<!-- 4) Lien vers la liste des documents -->
 <section class="upload-cell" style="margin-top:2rem;">
   <a href="{% url 'rawdocs:document_list' %}" class="upload-cell__enter-btn">
     <i class="fas fa-list"></i> Voir tous les documents
