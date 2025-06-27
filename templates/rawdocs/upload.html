@@ -61,10 +61,12 @@
 
 <!-- 4) Lien vers la liste des documents -->
 <section class="upload-cell" style="margin-top:2rem;">
-  <a href="{% url 'rawdocs:document_list' %}" class="upload-cell__enter-btn">
+  <a href="{% url 'rawdocs:dashboard' %}#metadata-tab"
+     class="upload-cell__enter-btn">
     <i class="fas fa-list"></i> Voir tous les documents
   </a>
 </section>
+
 
 <style>
 /* —— Upload cell —— */
@@ -202,4 +204,19 @@
   color: #fff;
 }
 </style>
+
+    <script>
+  // existant : gestion des clics sur les onglets…
+  // …
+
+  // → Au chargement, si on arrive sur #metadata-tab, on force l’onglet validation
+  document.addEventListener('DOMContentLoaded', () => {
+    if (location.hash === '#metadata-tab') {
+      btnMetadata.click();
+      // on remet la page proprement sur l’ancre
+      window.scrollTo(0, 0);
+    }
+  });
+</script>
+
 {% endblock %}
