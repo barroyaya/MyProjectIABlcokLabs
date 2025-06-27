@@ -1,5 +1,6 @@
 import os
 import requests
+import json
 from datetime import datetime
 
 from django.shortcuts       import render, redirect, get_object_or_404
@@ -11,6 +12,40 @@ from django.contrib.auth    import authenticate, login
 from .models import RawDocument
 from .forms  import URLForm, RegisterForm
 from .utils  import extract_metadonnees, extract_full_text
+
+from django.shortcuts import render
+from .models import RawDocument
+
+
+def dashboard_view(request):
+    documents = RawDocument.objects.all()
+
+    total_scrapped = documents.count()
+    total_planned = 150
+
+    # On ne filtre plus par "status" car ce champ n'existe pas
+    total_completed = 0   # ou à calculer autrement
+    total_rejected = 0    # idem
+    total_in_reextraction = 25
+    in_progress = 12
+    rescrapping = 3
+
+    context = {
+        'total_scrapped': total_scrapped,
+        'total_planned': total_planned,
+        'total_completed': total_completed,
+        'in_progress': in_progress,
+        'tasks_extraction': 15,
+        'tasks_validation': 8,
+        'tasks_annotation': 12,
+        'tasks_correction': 5,
+        'tasks_finalisation': 3,
+        # pré-encode les données pour JavaScript
+        'bar_data': json.dumps([total_planned, total_scrapped, total_completed, in_progress]),
+        'pie_data': json.dumps([15, 8, 12, 5, 3]),
+    }
+    return render(request, 'rawdocs/dashboard.html', context)
+
 
 
 def is_metadonneur(user):

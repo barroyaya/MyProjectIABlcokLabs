@@ -2,6 +2,7 @@
 
 from django.urls import path
 from django.contrib.auth import views as auth_views
+from rawdocs.views import dashboard_view
 from . import views
 
 app_name = 'rawdocs'
@@ -57,4 +58,6 @@ urlpatterns = [
         views.delete_document,
         name='document_delete'
     ),
+    # 8) dashboard
+    path('dashboard/', dashboard_view, name='dashboard'),
 ]
