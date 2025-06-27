@@ -33,3 +33,15 @@ class RegisterForm(UserCreationForm):
         group = Group.objects.get(name=self.cleaned_data["role"])
         user.groups.add(group)
         return user
+
+
+class MetadataEditForm(forms.Form):
+    title = forms.CharField(required=False)
+    type = forms.CharField(required=False)
+    publication_date = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}))
+    version = forms.CharField(required=False)
+    source = forms.CharField(required=False)
+    context = forms.CharField(required=False)
+    country = forms.CharField(required=False)
+    language = forms.CharField(required=False)
+    url_source = forms.URLField(required=False)

@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<style>
+  .container {
+    max-width: 850px;
+    margin: 2rem auto;
+    padding: 2rem;
+    background-color: #fff;
+    border-radius: 12px;
+    box-shadow: 0 0 12px rgba(0,0,0,0.08);
+    font-family: sans-serif;
+  }
+
+  h2 {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+    color: #333;
+  }
+
+  p {
+    font-size: 0.9rem;
+    color: #666;
+  }
+
+  .success {
+    background-color: #d4edda;
+    color: #155724;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    margin-bottom: 1.5rem;
+  }
+
+  form label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: bold;
+    color: #444;
+  }
+
+  form input,
+  form textarea,
+  form select {
+    width: 100%;
+    padding: 0.5rem;
+    margin-bottom: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 0.95rem;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem 2rem;
+  }
+
+  button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 0.6rem 1.2rem;
+    font-size: 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  button:hover {
+    background-color: #0056b3;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 2rem;
+  }
+
+  table th, table td {
+    border: 1px solid #ddd;
+    padding: 0.75rem;
+    text-align: left;
+    font-size: 0.9rem;
+  }
+
+  table thead {
+    background-color: #f0f0f0;
+  }
+
+  table tbody tr:nth-child(even) {
+    background-color: #fafafa;
+  }
+
+  .empty-message {
+    text-align: center;
+    color: #888;
+    padding: 1rem;
+  }
+</style>
+
+<div class="container">
+
+  <h2>📝 Édition des métadonnées</h2>
+  <p><strong>Fichier :</strong> {{ doc.file.name }}</p>
+
+  {% if success %}
+    <div class="success">✅ Les modifications ont été enregistrées avec succès.</div>
+  {% endif %}
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="form-grid">
+      {% for field in form %}
+        <div>
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {% if field.name == 'publication_date' %}
+            <input type="text" name="{{ field.name }}" value="{{ field.value|default_if_none:'' }}" />
+          {% else %}
+            {{ field }}
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+    <button type="submit"> Enregistrer les modifications</button>
+  </form>
+
+  <h3 style="margin-top: 3rem;"> Historique des modifications</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Champ</th>
+        <th>Ancienne valeur</th>
+        <th>Nouvelle valeur</th>
+        <th>Modifié par</th>
+        <th>Date</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in logs %}
+        <tr>
+          <td>{{ log.field_name }}</td>
+          <td>{{ log.old_value }}</td>
+          <td>{{ log.new_value }}</td>
+          <td>{{ log.modified_by.username }}</td>
+          <td>{{ log.modified_at|date:"d/m/Y H:i" }}</td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="5" class="empty-message">Aucune modification enregistrée.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+</div>
+
+{% endblock %}

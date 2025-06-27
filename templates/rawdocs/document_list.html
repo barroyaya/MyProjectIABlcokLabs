@@ -22,9 +22,9 @@
           <td>{{ doc.file.name|basename }}</td>
           <td>{{ doc.created_at|date:"d/m/Y H:i" }}</td>
           <td class="actions-cell">
-            <a href="{% url 'rawdocs:document_metadata' doc.id %}" class="btn-outline">
-              <i class="fas fa-eye"></i>
-            </a>
+          <a href="{% url 'rawdocs:edit_metadata' doc.id %}" class="btn-outline" title="Voir / éditer les métadonnées">
+          <i class="fas fa-eye"></i>
+          </a>
             <form method="post"
                   action="{% url 'rawdocs:document_delete' doc.id %}">
               {% csrf_token %}

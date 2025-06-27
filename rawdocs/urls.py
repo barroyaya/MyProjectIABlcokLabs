@@ -1,9 +1,7 @@
-# rawdocs/urls.py
-
 from django.urls import path
 from django.contrib.auth import views as auth_views
-from rawdocs.views import dashboard_view
 from . import views
+from .views import dashboard_view
 
 app_name = 'rawdocs'
 
@@ -58,6 +56,18 @@ urlpatterns = [
         views.delete_document,
         name='document_delete'
     ),
-    # 8) dashboard
-    path('dashboard/', dashboard_view, name='dashboard'),
+
+    # 8) Édition manuelle des métadonnées
+    path(
+        'edit/<int:doc_id>/',
+        views.edit_metadata,
+        name='edit_metadata'
+    ),
+
+    # 9) Tableau de bord
+    path(
+        'dashboard/',
+        dashboard_view,
+        name='dashboard'
+    ),
 ]
