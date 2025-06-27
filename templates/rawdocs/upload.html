@@ -6,10 +6,10 @@
 <section class="upload-cell">
   <form method="post" class="upload-cell__form" novalidate>
     {% csrf_token %}
-    <button type="submit" class="upload-cell__enter-btn">
-      <i class="fas fa-sign-in-alt"></i> Entrer
-    </button>
     {{ form.pdf_url }}
+        <button type="submit" class="upload-cell__enter-btn">
+            <i class="fas fa-sign-in-alt"></i> Submit
+        </button>
   </form>
 </section>
 
