@@ -5,6 +5,109 @@
 
 <style>
     @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+  }
+  @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+  }
+  .card-hover {
+      transition: all 0.3s ease;
+  }
+  .card-hover:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1),
+                  0 10px 10px -5px rgba(0,0,0,0.04);
+  }
+  .animate-fade-in { animation: fadeIn 0.5s ease-in-out; }
+  .animate-slide-up { animation: slideUp 0.3s ease-out; }
+
+  /* Styles repris de document_list.html pour l’onglet Validation */
+  .metadata-card {
+    padding: 1.5rem;
+    margin: 2rem auto;
+    max-width: 800px;
+  }
+  .metadata-card h2 {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+  }
+  .metadata-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .metadata-table thead th {
+    text-align: left;
+    padding: .75rem;
+    background: var(--background-color);
+    border-bottom: 2px solid var(--border-color);
+  }
+  .metadata-table tbody td {
+    padding: .75rem;
+    border-bottom: 1px solid var(--border-color);
+  }
+  .metadata-table tbody tr:hover {
+    background: rgba(0,0,0,0.03);
+  }
+  .actions-cell {
+    white-space: nowrap;
+  }
+  .actions-cell a,
+  .actions-cell form {
+    display: inline-flex;
+    align-items: center;
+    margin-right: .5rem;
+  }
+  .btn-outline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    border: 2px solid var(--primary-color);
+    border-radius: var(--border-radius);
+    color: var(--primary-color);
+    background: transparent;
+    text-decoration: none;
+    font-size: 1rem;
+    transition: var(--transition-all);
+  }
+  .btn-outline:hover {
+    background: var(--primary-color);
+    color: #fff;
+  }
+  .btn-delete {
+    border-color: #e3342f;
+  }
+  .btn-delete:hover {
+    background: #e3342f;
+  }
+  .upload-cell {
+    display: flex;
+    justify-content: center;
+  }
+  .upload-cell__enter-btn {
+    background: var(--primary-color);
+    color: #fff;
+    border: none;
+    padding: .6rem 1.2rem;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: var(--transition-all);
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }
+  .upload-cell__enter-btn:hover {
+    background: var(--primary-hover);
+  }
+
+
+    @keyframes fadeIn {
         from { opacity: 0; }
         to { opacity: 1; }
     }
@@ -469,20 +572,16 @@
   const btnMetadata  = document.getElementById('tab-metadata');
 
   btnDashboard.addEventListener('click', () => {
-    dashboardTab.classList.remove('hidden');
-    dashboardTab.classList.add('block');
-    metadataTab.classList.add('hidden');
-    metadataTab.classList.remove('block');
+    dashboardTab.classList.remove('hidden');    dashboardTab.classList.add('block');
+    metadataTab.classList.add('hidden');       metadataTab.classList.remove('block');
     btnDashboard.classList.add('text-blue-600','border-b-2','border-blue-600');
     btnMetadata.classList.remove('text-blue-600','border-b-2','border-blue-600');
     btnMetadata.classList.add('text-gray-600');
   });
 
   btnMetadata.addEventListener('click', () => {
-    metadataTab.classList.remove('hidden');
-    metadataTab.classList.add('block');
-    dashboardTab.classList.add('hidden');
-    dashboardTab.classList.remove('block');
+    metadataTab.classList.remove('hidden');     metadataTab.classList.add('block');
+    dashboardTab.classList.add('hidden');       dashboardTab.classList.remove('block');
     btnMetadata.classList.add('text-blue-600','border-b-2','border-blue-600');
     btnDashboard.classList.remove('text-blue-600','border-b-2','border-blue-600');
     btnDashboard.classList.add('text-gray-600');
