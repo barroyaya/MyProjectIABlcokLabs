@@ -37,4 +37,24 @@ urlpatterns = [
         name='upload'
     ),
 
+    # 5) Liste des documents importés
+    path(
+        'documents/',
+        views.document_list,
+        name='document_list'
+    ),
+
+    # 6) Métadonnées JSON pour un document
+    path(
+        'documents/<int:doc_id>/metadata/',
+        views.document_metadata,
+        name='document_metadata'
+    ),
+
+    # 7) Suppression d’un document
+    path(
+        'document/<int:doc_id>/delete/',
+        views.delete_document,
+        name='document_delete'
+    ),
 ]

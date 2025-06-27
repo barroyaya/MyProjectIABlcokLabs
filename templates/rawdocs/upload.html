@@ -60,6 +60,13 @@
 </section>
 {% endif %}
 
+<!-- 4) Bouton pour accéder à la liste des documents -->
+<section class="upload-cell" style="margin-top:2rem;">
+  <a href="{% url 'rawdocs:document_list' %}" class="upload-cell__enter-btn">
+    <i class="fas fa-list"></i> Voir tous les documents
+  </a>
+</section>
+
 <style>
 /* —— Upload cell —— */
 .upload-cell {
