@@ -2,14 +2,33 @@
 {% block title %}Importer un PDF – RawDocs{% endblock %}
 
 {% block content %}
-<!-- 1) Upload Form -->
+<!-- 1) Upload Form (URL ou fichier local) -->
 <section class="upload-cell">
-  <form method="post" class="upload-cell__form" novalidate>
+  <form method="post" enctype="multipart/form-data" class="upload-cell__form" novalidate>
     {% csrf_token %}
-    {{ form.pdf_url }}
-        <button type="submit" class="upload-cell__enter-btn">
-            <i class="fas fa-sign-in-alt"></i> Submit
-        </button>
+    <!-- URL Field -->
+    <input
+      type="url"
+      name="pdf_url"
+      placeholder="Entrez l’URL du PDF…"
+      value="{{ form.pdf_url.value|default_if_none:'' }}"
+      class="upload-cell__input"
+    />
+
+    <!-- OR Separator -->
+    <span class="upload-cell__or">OU</span>
+
+    <!-- Local File Field -->
+    <input
+      type="file"
+      name="pdf_file"
+      accept="application/pdf"
+      class="upload-cell__input upload-cell__file-input"
+    />
+
+    <button type="submit" class="upload-cell__enter-btn">
+      <i class="fas fa-upload"></i> Importer
+    </button>
   </form>
 </section>
 
@@ -23,17 +42,23 @@
       <tr><th>Type de document</th>   <td>{{ metadata.type|default:"–" }}</td></tr>
       <tr><th>Langue</th>             <td>{{ metadata.language|default:"–" }}</td></tr>
       <tr><th>Version</th>            <td>{{ metadata.version|default:"–" }}</td></tr>
-      <tr><th>URL Source</th>
+      <tr>
+        <th>URL Source</th>
         <td>
+          {% if metadata.url_source %}
           <a href="{{ metadata.url_source }}" target="_blank" class="source-link">
             <i class="fas fa-external-link-alt"></i>
             {{ metadata.url_source }}
           </a>
+          {% else %}
+            –
+          {% endif %}
         </td>
       </tr>
       <tr><th>Source interne</th>     <td>{{ metadata.source|default:"Non spécifiée" }}</td></tr>
       <tr><th>Date de publication</th><td>{{ metadata.publication_date|default:"Non spécifiée" }}</td></tr>
-      <tr><th>Contexte</th>
+      <tr>
+        <th>Contexte</th>
         <td>
           <div class="context-text">
             {{ metadata.context|default:"Aucun contexte fourni" }}
@@ -46,7 +71,7 @@
 </section>
 {% endif %}
 
-<!-- 3) Text Extract -->
+<!-- 3) Texte Extrait -->
 {% if extracted_text %}
 <section class="card text-card">
   <h3><i class="fas fa-file-alt"></i> Texte complet extrait</h3>
@@ -59,7 +84,7 @@
 </section>
 {% endif %}
 
-<!-- 4) Lien vers la liste des documents -->
+<!-- 4) Lien vers la liste des documents (Dashboard onglet Validation Métadonnées) -->
 <section class="upload-cell" style="margin-top:2rem;">
   <a href="{% url 'rawdocs:dashboard' %}#metadata-tab"
      class="upload-cell__enter-btn">
@@ -69,7 +94,7 @@
 
 
 <style>
-/* —— Upload cell —— */
+/* —— Upload Cell —— */
 .upload-cell {
   display: flex;
   justify-content: center;
@@ -78,15 +103,40 @@
 .upload-cell__form {
   display: flex;
   align-items: center;
-  gap: .5rem;
+  gap: .75rem;
+  flex-wrap: wrap;
   width: 100%;
-  max-width: 500px;
+  max-width: 600px;
 }
+.upload-cell__input {
+  flex: 1;
+  min-width: 200px;
+  padding: .75rem 1rem;
+  font-size: 1rem;
+  border: 2px solid var(--border-color);
+  border-radius: var(--border-radius);
+  transition: var(--transition-all);
+}
+.upload-cell__file-input {
+  padding: .5rem;
+}
+.upload-cell__input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+}
+.upload-cell__or {
+  font-weight: bold;
+  color: var(--text-alt);
+  margin: 0 .5rem;
+}
+
+/* —— Submit Button —— */
 .upload-cell__enter-btn {
   background: var(--primary-color);
   color: #fff;
   border: none;
-  padding: .5rem .75rem;
+  padding: .6rem 1.2rem;
   border-radius: var(--border-radius);
   cursor: pointer;
   transition: var(--transition-all);
@@ -96,19 +146,6 @@
 }
 .upload-cell__enter-btn:hover {
   background: var(--primary-hover);
-}
-.upload-cell__input {
-  flex: 1;
-  padding: .75rem 1rem;
-  font-size: 1rem;
-  border: 2px solid var(--border-color);
-  border-radius: var(--border-radius);
-  transition: var(--transition-all);
-}
-.upload-cell__input:focus {
-  outline: none;
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
 }
 
 /* —— Métadonnées —— */
@@ -158,7 +195,7 @@
   line-height: 1.4;
 }
 
-/* —— Texte extrait —— */
+/* —— Texte Extrait —— */
 .text-card {
   background: var(--surface-color);
   border-radius: var(--border-radius);
@@ -205,18 +242,14 @@
 }
 </style>
 
-    <script>
-  // existant : gestion des clics sur les onglets…
-  // …
 
-  // → Au chargement, si on arrive sur #metadata-tab, on force l’onglet validation
+<script>
+  // Au chargement, si on arrive sur #metadata-tab, on bascule sur l’onglet Validation Métadonnées
   document.addEventListener('DOMContentLoaded', () => {
-    if (location.hash === '#metadata-tab') {
+    if (location.hash === '#metadata-tab' && typeof btnMetadata !== 'undefined') {
       btnMetadata.click();
-      // on remet la page proprement sur l’ancre
       window.scrollTo(0, 0);
     }
   });
 </script>
-
 {% endblock %}

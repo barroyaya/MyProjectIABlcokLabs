@@ -10,7 +10,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth    import authenticate, login
 
 from .models import RawDocument, MetadataLog
-from .forms  import URLForm, RegisterForm, MetadataEditForm
+from .forms  import UploadForm, RegisterForm, MetadataEditForm
 from .utils  import extract_metadonnees, extract_full_text
 
 
@@ -21,18 +21,18 @@ def is_metadonneur(user):
 @login_required(login_url='rawdocs:login')
 @user_passes_test(is_metadonneur, login_url='rawdocs:login')
 def dashboard_view(request):
-    # Tous les documents de l’utilisateur
+    """Affiche le dashboard avec stats et liste pour validation."""
     documents = RawDocument.objects.filter(owner=request.user).order_by('-created_at')
 
     total_scrapped        = documents.count()
     total_planned         = 150
-    total_completed       = 0    # À adapter si vous avez un champ de statut
+    total_completed       = 0    # À adapter si vous stockez un statut
     total_in_reextraction = 25
     in_progress           = 12
     rescrapping           = 3
 
     context = {
-        'documents':          documents,  # pour l’onglet Validation Métadonnées
+        'documents':          documents,
         'total_scrapped':     total_scrapped,
         'total_planned':      total_planned,
         'total_completed':    total_completed,
@@ -51,26 +51,32 @@ def dashboard_view(request):
 @login_required(login_url='rawdocs:login')
 @user_passes_test(is_metadonneur, login_url='rawdocs:login')
 def upload_pdf(request):
-    form    = URLForm(request.POST or None)
+    """
+    Permet d'uploader un PDF via URL ou fichier local, puis d'en extraire les métadonnées.
+    """
+    form    = UploadForm(request.POST or None, request.FILES or None)
     context = {'form': form}
 
     if request.method == 'POST' and form.is_valid():
-        url  = form.cleaned_data['pdf_url']
-        resp = requests.get(url)
-        resp.raise_for_status()
+        # On priorise le fichier local
+        if form.cleaned_data.get('pdf_file'):
+            uploaded = form.cleaned_data['pdf_file']
+            rd = RawDocument(owner=request.user)
+            rd.file.save(uploaded.name, uploaded)
+        else:
+            url  = form.cleaned_data['pdf_url']
+            resp = requests.get(url)
+            resp.raise_for_status()
+            ts       = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = os.path.basename(url)
+            rd = RawDocument(url=url, owner=request.user)
+            rd.file.save(os.path.join(ts, filename), ContentFile(resp.content))
 
-        # Sauvegarde du PDF
-        ts       = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = os.path.basename(url)
-        rd = RawDocument(url=url, owner=request.user)
-        rd.file.save(os.path.join(ts, filename), ContentFile(resp.content))
         rd.save()
-
-        # Base name pour l’affichage
         rd.basename = os.path.basename(rd.file.name)
 
-        # Extraction sans IA
-        metadata       = extract_metadonnees(rd.file.path, rd.url)
+        # Extraction
+        metadata       = extract_metadonnees(rd.file.path, rd.url or "")
         extracted_text = extract_full_text(rd.file.path)
 
         context.update({
@@ -83,6 +89,7 @@ def upload_pdf(request):
 
 
 def register(request):
+    """Formulaire d'inscription et création de compte + groupe."""
     if request.method == 'POST':
         form = RegisterForm(request.POST)
         if form.is_valid():
@@ -100,27 +107,26 @@ def register(request):
 @login_required(login_url='rawdocs:login')
 @user_passes_test(is_metadonneur, login_url='rawdocs:login')
 def document_list(request):
+    """Liste brute des documents importés."""
     documents = RawDocument.objects.filter(owner=request.user).order_by('-created_at')
-    # Prépare basename pour chaque doc
     for doc in documents:
         doc.basename = os.path.basename(doc.file.name)
-
-    return render(request, 'rawdocs/document_list.html', {
-        'documents': documents
-    })
+    return render(request, 'rawdocs/document_list.html', {'documents': documents})
 
 
 @login_required(login_url='rawdocs:login')
 @user_passes_test(is_metadonneur, login_url='rawdocs:login')
 def document_metadata(request, doc_id):
+    """Retourne en JSON les métadonnées extraites d’un document."""
     rd = get_object_or_404(RawDocument, id=doc_id, owner=request.user)
-    metadata = extract_metadonnees(rd.file.path, rd.url)
+    metadata = extract_metadonnees(rd.file.path, rd.url or "")
     return JsonResponse(metadata)
 
 
 @login_required(login_url='rawdocs:login')
 @user_passes_test(is_metadonneur, login_url='rawdocs:login')
 def delete_document(request, doc_id):
+    """Supprime définitivement un document."""
     rd = get_object_or_404(RawDocument, id=doc_id, owner=request.user)
     if request.method == 'POST':
         rd.delete()
@@ -130,11 +136,14 @@ def delete_document(request, doc_id):
 @login_required(login_url='rawdocs:login')
 @user_passes_test(is_metadonneur, login_url='rawdocs:login')
 def edit_metadata(request, doc_id):
+    """
+    Affiche/traite le formulaire d’édition des métadonnées
+    et journalise les modifications.
+    """
     rd = get_object_or_404(RawDocument, id=doc_id, owner=request.user)
-    # Base name pour le template
     rd.basename = os.path.basename(rd.file.name)
+    metadata   = extract_metadonnees(rd.file.path, rd.url or "")
 
-    metadata = extract_metadonnees(rd.file.path, rd.url)
     if request.method == 'POST':
         form = MetadataEditForm(request.POST)
         if form.is_valid():
@@ -156,9 +165,7 @@ def edit_metadata(request, doc_id):
         form    = MetadataEditForm(initial=metadata)
         success = False
 
-    # Récupère les logs, ordonnés du plus récent
     logs = MetadataLog.objects.filter(document=rd).order_by('-modified_at')
-
     return render(request, 'rawdocs/edit_metadata.html', {
         'form':     form,
         'metadata': metadata,
