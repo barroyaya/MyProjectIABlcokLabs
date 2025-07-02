@@ -7,62 +7,110 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}RawDocs{% endblock %}</title>
 
-  <!-- TailwindCSS CDN (ajoute ceci AVANT ton propre CSS pour override) -->
+  <!-- TailwindCSS -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Ton CSS existant (facultatif, en dernier si tu veux override Tailwind) -->
+  <!-- Your custom stylesheet (overrides Tailwind if needed) -->
   <link rel="stylesheet" href="{% static 'rawdocs/css/styles.css' %}">
 
-  <!-- FontAwesome pour les icônes -->
+  <!-- FontAwesome icons -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 
-<body>
-  <div class="app-container">
-    <header class="site-header">
-      <div class="header-content">
-        <a href="{% url 'rawdocs:dashboard' %}" class="logo">
-          <i class="fas fa-file-pdf"></i>
+<body class="bg-gray-50 min-h-screen flex flex-col">
+  <div class="app-container flex-1 flex flex-col">
+
+    <!-- Header -->
+    <header class="site-header bg-white shadow-sm border-b">
+      <div class="header-content container mx-auto px-6 flex items-center justify-between py-4">
+        <!-- Logo / Home -->
+        <a href="{% url 'rawdocs:dashboard' %}" class="logo flex items-center text-xl font-bold text-blue-600">
+          <i class="fas fa-file-pdf mr-2"></i>
           <span>IABlockLabs</span>
         </a>
 
         {% if user.is_authenticated %}
-          <div class="user-info">
-            <span class="user-role">
-              <i class="fas fa-id-badge"></i>
+          <!-- Role-based Navigation -->
+          <nav class="role-nav hidden md:flex gap-4">
+            {% with group=user.groups.first %}
+              {% if group.name == "Metadonneur" %}
+                <a href="{% url 'rawdocs:upload' %}" class="nav-link">
+                  <i class="fas fa-upload"></i> Importer
+                </a>
+                <a href="{% url 'rawdocs:document_list' %}" class="nav-link">
+                  <i class="fas fa-list"></i> Documents
+                </a>
+              {% elif group.name == "Annotateur" %}
+                <a href="{% url 'rawdocs:annotation_dashboard' %}" class="nav-link">
+                  <i class="fas fa-highlighter"></i> Annotation
+                </a>
+              {% elif group.name == "Expert" %}
+                <a href="{% url 'rawdocs:annotation_dashboard' %}" class="nav-link">
+                  <i class="fas fa-graduation-cap"></i> Expertise
+                </a>
+              {% endif %}
+            {% endwith %}
+          </nav>
+
+          <!-- User Info & Logout -->
+          <div class="user-info flex items-center gap-4">
+            <span class="flex items-center text-gray-700">
+              <i class="fas fa-id-badge mr-1"></i>
               {{ user.groups.first.name }}
             </span>
-            <span class="user-name">
-              <i class="fas fa-user"></i>
+            <span class="flex items-center text-gray-700">
+              <i class="fas fa-user mr-1"></i>
               {{ user.username }}
             </span>
-            <form method="post" action="{% url 'rawdocs:logout' %}" class="logout-form">
+            <form method="post" action="{% url 'rawdocs:logout' %}">
               {% csrf_token %}
-              <button type="submit" class="btn btn-logout">
-                <i class="fas fa-sign-out-alt"></i> Déconnexion
+              <button type="submit"
+                      class="btn-logout inline-flex items-center px-3 py-1.5 border border-red-500 text-red-500 rounded hover:bg-red-50 transition">
+                <i class="fas fa-sign-out-alt mr-1"></i> Déconnexion
               </button>
             </form>
           </div>
         {% else %}
-          <nav class="nav-menu">
-            <a href="{% url 'rawdocs:login'    %}" class="nav-link"><i class="fas fa-sign-in-alt"></i> Connexion</a>
-            <a href="{% url 'rawdocs:register' %}" class="nav-link"><i class="fas fa-user-plus"></i> Inscription</a>
+          <!-- Login/Register -->
+          <nav class="nav-menu flex gap-4">
+            <a href="{% url 'rawdocs:login'    %}" class="nav-link inline-flex items-center gap-1 text-blue-600 hover:underline">
+              <i class="fas fa-sign-in-alt"></i> Connexion
+            </a>
+            <a href="{% url 'rawdocs:register' %}" class="nav-link inline-flex items-center gap-1 text-green-600 hover:underline">
+              <i class="fas fa-user-plus"></i> Inscription
+            </a>
           </nav>
         {% endif %}
       </div>
     </header>
 
-    <main class="site-main">
-      <div class="main-content">
-        {% block content %}{% endblock %}
-      </div>
+    <!-- Main Content -->
+    <main class="site-main flex-1 container mx-auto px-6 py-8">
+      {% block content %}{% endblock %}
     </main>
 
-    <footer class="site-footer">
-      <div class="footer-content">
-        <p>&copy; 2025 IABlockLabs – Gestionnaire et Extraction de documents</p>
+    <!-- Footer -->
+    <footer class="site-footer bg-white border-t py-4">
+      <div class="footer-content text-center text-gray-600 text-sm">
+        &copy; 2025 IABlockLabs – Gestionnaire et Extraction de documents
       </div>
     </footer>
   </div>
+
+  <!-- Inline Styles for Header/Nav -->
+  <style>
+    .role-nav .nav-link {
+      @apply inline-flex items-center gap-1 px-3 py-1 rounded text-gray-700 hover:bg-gray-100 transition;
+    }
+    .btn-logout {
+      @apply text-sm;
+    }
+
+    /* Responsive tweaks */
+    @media (max-width: 768px) {
+      .role-nav { display: none; }
+      .nav-menu { margin-left: auto; }
+    }
+  </style>
 </body>
 </html>

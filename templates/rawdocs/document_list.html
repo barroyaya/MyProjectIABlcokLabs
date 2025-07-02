@@ -22,16 +22,30 @@
           <td>{{ doc.file.name|basename }}</td>
           <td>{{ doc.created_at|date:"d/m/Y H:i" }}</td>
           <td class="actions-cell">
-          <a href="{% url 'rawdocs:edit_metadata' doc.id %}" class="btn-outline" title="Voir / éditer les métadonnées">
-          <i class="fas fa-eye"></i>
-          </a>
+            {# Voir/éditer métadonnées #}
+            <a href="{% url 'rawdocs:edit_metadata' doc.id %}"
+               class="btn-outline"
+               title="Voir / éditer les métadonnées">
+              <i class="fas fa-eye"></i>
+            </a>
+
+            {# Supprimer #}
             <form method="post"
                   action="{% url 'rawdocs:document_delete' doc.id %}">
               {% csrf_token %}
-              <button type="submit" class="btn-outline btn-delete">
+              <button type="submit" class="btn-outline btn-delete" title="Supprimer">
                 <i class="fas fa-trash"></i>
               </button>
             </form>
+
+            {# Valider pour annotation si pas déjà validé #}
+            {% if not doc.is_validated %}
+            <a href="{% url 'rawdocs:validate_document' doc.id %}"
+               class="btn-outline"
+               title="Valider pour annotation">
+              <i class="fas fa-check"></i>
+            </a>
+            {% endif %}
           </td>
         </tr>
         {% endfor %}
@@ -82,11 +96,11 @@
 
 /* Cellule d’actions : icônes alignées sur la même ligne */
 .actions-cell {
-  white-space: nowrap;             /* empêche le wrapping */
+  white-space: nowrap;
 }
 .actions-cell a,
 .actions-cell form {
-  display: inline-flex;            /* boutons côte à côte */
+  display: inline-flex;
   align-items: center;
   margin-right: .5rem;
 }
