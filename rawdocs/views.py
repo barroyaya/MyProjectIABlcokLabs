@@ -91,7 +91,7 @@ class CustomLoginView(auth_views.LoginView):
     def get_success_url(self):
         user = self.request.user
         grp  = user.groups.first().name if user.groups.exists() else None
-        if grp=="Metadonneur": return '/upload/'
+        if grp=="Metadonneur": return '/dashboard/'
         if grp in ("Annotateur","Expert"): return '/annotation/'
         return '/upload/'
 
