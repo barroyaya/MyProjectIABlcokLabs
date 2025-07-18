@@ -400,6 +400,46 @@
   margin-top: 0;
 }
 
+/* Validation Success Message */
+.validation-success {
+  background: linear-gradient(45deg, #10b981, #059669);
+  color: white;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  transition: opacity 0.5s ease;
+}
+
+.validation-success i {
+  font-size: 1.5rem;
+}
+
+.validation-details {
+  margin-top: 0.5rem;
+}
+
+.metric-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.25rem 0;
+}
+
+.metric-row.total {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255,255,255,0.2);
+}
+
+.metric-row.score {
+  font-weight: bold;
+  color: #fef3c7;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .annotation-header {
@@ -538,11 +578,12 @@
     </div>
   </div>
 </section>
-<section class="learning-dashboard-widget" id="learning-widget" style="display: none;">
-</section>
+
+<!-- Learning Dashboard Widget -->
+<section class="learning-dashboard-widget" id="learning-widget" style="display: none;"></section>
 
 <!-- Main Text Content -->
-<section class="text-content-card">
+<section class="text-content-card main-content">
   <h3>
     <i class="fas fa-file-text"></i>
     Page {{ current_page.page_number }}
@@ -586,6 +627,7 @@
     {% endfor %}
   </div>
 </section>
+
 <script src="{% static 'rawdocs/js/rlhf_annotation.js' %}"></script>
 
 <script>

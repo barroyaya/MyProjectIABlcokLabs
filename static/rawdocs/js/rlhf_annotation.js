@@ -115,10 +115,18 @@ function handleResponse(response) {
 
 // Enhanced validation success display
 function showValidationSuccess(message, feedbackScore, corrections = {}) {
-    const container = document.querySelector('.main-content');
-    if (!container) return;
+    // Conteneurs plus spécifiques à votre structure HTML
+    let container = document.querySelector('.text-content-card') ||
+                   document.querySelector('.annotations-list') ||
+                   document.querySelector('.page-navigation') ||
+                   document.body;
 
-    // Calculate metrics with fallbacks
+    if (!container) {
+        console.error("Aucun conteneur trouvé pour afficher le message de validation");
+        return;
+    }
+
+    // Calcul des métriques avec valeurs par défaut
     const metrics = {
         kept_correct: corrections.kept_correct?.length || 0,
         false_positives: corrections.false_positives?.length || 0,
@@ -149,8 +157,45 @@ function showValidationSuccess(message, feedbackScore, corrections = {}) {
         </div>
     `;
 
-    container.prepend(successDiv);
-    setTimeout(() => successDiv.remove(), 8000);
+    // Style du message de succès
+    successDiv.style.cssText = `
+        background: linear-gradient(45deg, #10b981, #059669);
+        color: white;
+        padding: 1rem 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    `;
+
+    // Méthode d'insertion plus robuste
+    try {
+        if (container === document.body) {
+            successDiv.style.position = 'fixed';
+            successDiv.style.top = '20px';
+            successDiv.style.right = '20px';
+            successDiv.style.zIndex = '1000';
+            container.appendChild(successDiv);
+        } else {
+            // Insertion en haut du conteneur si possible
+            if (container.firstChild) {
+                container.insertBefore(successDiv, container.firstChild);
+            } else {
+                container.appendChild(successDiv);
+            }
+        }
+    } catch (e) {
+        console.error("Erreur d'insertion du message:", e);
+        // Fallback simple
+        document.body.appendChild(successDiv);
+    }
+
+    setTimeout(() => {
+        successDiv.style.opacity = '0';
+        setTimeout(() => successDiv.remove(), 500);
+    }, 5000);
 }
 
 function createMetricRow(icon, text, value, extraClass = '') {
@@ -200,7 +245,7 @@ function createLearningWidget() {
     const widget = document.createElement('section');
     widget.id = 'learning-widget';
     widget.className = 'learning-dashboard-widget';
-    document.querySelector('.main-content')?.appendChild(widget);
+    document.querySelector('.text-content-card')?.appendChild(widget);
     return widget;
 }
 
