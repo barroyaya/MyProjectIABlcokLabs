@@ -93,11 +93,12 @@ urlpatterns = [
         name='annotate_document'
     ),
 
-    # AI annotation using Groq
-    path('annotation/groq/<int:page_id>/',
-         views.ai_annotate_page_groq,
-         name='ai_annotate_page_groq'
-         ),
+    # 13) AI annotation using Groq
+    path(
+        'annotation/groq/<int:page_id>/',
+        views.ai_annotate_page_groq,
+        name='ai_annotate_page_groq'
+    ),
 
     # 14) Save a manual annotation
     path(
@@ -118,5 +119,19 @@ urlpatterns = [
         'annotation/<int:annotation_id>/delete/',
         views.delete_annotation,
         name='delete_annotation'
+    ),
+
+    # 17) Validate page annotations (RLHF)
+    path(
+        'annotation/validate-page/<int:page_id>/',
+        views.validate_page_annotations,
+        name='validate_page_annotations'
+    ),
+
+    # 18) Learning dashboard
+    path(
+        'learning/dashboard/',
+        views.get_learning_dashboard,
+        name='learning_dashboard'
     ),
 ]
