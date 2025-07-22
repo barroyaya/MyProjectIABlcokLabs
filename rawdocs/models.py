@@ -32,6 +32,10 @@ class RawDocument(models.Model):
     # Statut de validation
     is_validated = models.BooleanField(default=False, help_text="Document validé par un métadonneur")
     validated_at = models.DateTimeField(null=True, blank=True)
+    # Expert review status
+    is_ready_for_expert = models.BooleanField(default=False, help_text="Document prêt pour révision expert")
+    expert_ready_at = models.DateTimeField(null=True, blank=True,
+                                           help_text="Date à laquelle le document est devenu prêt pour l'expert")
 
     # Extraction de pages
     total_pages = models.IntegerField(default=0, help_text="Nombre total de pages")
@@ -141,6 +145,29 @@ class Annotation(models.Model):
     confidence_score = models.FloatField(default=0.0, help_text="Score IA (0.0–1.0)")
     ai_reasoning = models.TextField(blank=True, help_text="Raisonnement IA pour cette annotation")
 
+    # Expert validation status
+    VALIDATION_CHOICES = [
+        ('pending', 'En attente'),
+        ('validated', 'Validé'),
+        ('rejected', 'Rejeté'),
+        ('expert_created', 'Créé par expert'),
+    ]
+
+    validation_status = models.CharField(
+        max_length=20,
+        choices=VALIDATION_CHOICES,
+        default='pending',
+        help_text="Statut de validation par l'expert"
+    )
+
+    # Source tracking
+    SOURCE_CHOICES = [
+        ('ai', 'Intelligence Artificielle'),
+        ('manual', 'Manuel'),
+        ('expert', 'Expert'),
+    ]
+    source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default='ai')
+
     # Manual validation
     is_validated = models.BooleanField(default=False)
     validated_by = models.ForeignKey(
@@ -149,6 +176,7 @@ class Annotation(models.Model):
         null=True, blank=True,
         related_name='validated_annotations'
     )
+    validated_at = models.DateTimeField(null=True, blank=True)
 
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)

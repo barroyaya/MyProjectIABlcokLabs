@@ -1,4 +1,3 @@
-# rawdocs/views.py
 import os
 import json
 import requests
@@ -87,7 +86,11 @@ def is_metadonneur(user):
 
 
 def is_annotateur(user):
-    return user.groups.filter(name="Annotateur").exists()
+    return user.groups.filter(name__in=["Annotateur", "Expert"]).exists()
+
+
+def is_expert(user):
+    return user.groups.filter(name="Expert").exists()
 
 
 # ——— Authentication ————————————————————————————————————
@@ -581,3 +584,83 @@ def ai_annotate_page_groq(request, page_id):
         return JsonResponse({
             'error': f'Erreur GROQ: {str(e)}'
         }, status=500)
+
+
+@login_required
+def get_document_status(request, doc_id):
+    """Get document validation status"""
+    try:
+        document = get_object_or_404(RawDocument, id=doc_id)
+        total_pages = document.pages.count()
+        validated_pages = document.pages.filter(is_validated_by_human=True).count()
+
+        return JsonResponse({
+            'total_pages': total_pages,
+            'validated_pages': validated_pages,
+            'is_ready_for_expert': document.is_ready_for_expert,
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@csrf_exempt
+def submit_for_expert_review(request, doc_id):
+    """Submit entire document for expert review"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    try:
+        document = get_object_or_404(RawDocument, id=doc_id)
+        document.is_ready_for_expert = True
+        document.expert_ready_at = datetime.now()
+        document.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Document soumis pour révision expert!'
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@csrf_exempt
+def create_annotation_type(request):
+    """Create a new annotation type"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        name = data.get('name', '').strip().lower().replace(' ', '_')
+        display_name = data.get('display_name', '').strip()
+
+        if not name or not display_name:
+            return JsonResponse({'error': 'Name and display name are required'}, status=400)
+
+        # Check if already exists
+        if AnnotationType.objects.filter(name=name).exists():
+            return JsonResponse({'error': f'Annotation type "{display_name}" already exists'}, status=400)
+
+        # Create new annotation type
+        annotation_type = AnnotationType.objects.create(
+            name=name,
+            display_name=display_name,
+            color='#6366f1',  # Default purple color
+            description=f'Custom annotation type created by {request.user.username}'
+        )
+
+        return JsonResponse({
+            'success': True,
+            'annotation_type': {
+                'id': annotation_type.id,
+                'name': annotation_type.name,
+                'display_name': annotation_type.display_name,
+                'color': annotation_type.color
+            },
+            'message': f'Annotation type "{display_name}" created successfully!'
+        })
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
