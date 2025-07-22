@@ -1,0 +1,67 @@
+{% extends 'expert/base.html' %}
+
+{% block title %}Expert Dashboard - RegExpert{% endblock %}
+{% block page_title %}Dashboard Expert{% endblock %}
+{% block page_subtitle %}Révision et validation des annotations{% endblock %}
+
+{% block content %}
+<!-- Stats -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="stat-card text-center">
+            <div class="stat-number text-warning">{{ ready_documents_count }}</div>
+            <h6 class="text-muted">Documents à réviser</h6>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card text-center">
+            <div class="stat-number text-info">{{ pending_annotations }}</div>
+            <h6 class="text-muted">Annotations en attente</h6>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card text-center">
+            <a href="{% url 'expert:document_list' %}" class="btn btn-primary btn-lg">
+                <i class="fas fa-list me-2"></i>Voir les Documents
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Documents -->
+<div class="row">
+    <div class="col-12">
+        <div class="stat-card">
+            <h6 class="mb-3">📋 Documents Récents à Réviser</h6>
+            
+            {% if recent_documents %}
+                {% for document in recent_documents %}
+                    <div class="d-flex justify-content-between align-items-center mb-3 p-3 bg-light rounded">
+                        <div>
+                            <strong class="text-dark">{{ document.file.name|truncatechars:50 }}</strong>
+                            <br><small class="text-muted">
+                                <i class="fas fa-calendar me-1"></i>{{ document.validated_at|date:"d/m/Y" }}
+                            </small>
+                        </div>
+                        <a href="{% url 'expert:review_document' document.id %}" class="btn btn-primary">
+                            <i class="fas fa-eye me-1"></i>Réviser
+                        </a>
+                    </div>
+                {% endfor %}
+                
+                <div class="text-center mt-3">
+                    <a href="{% url 'expert:document_list' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-list me-2"></i>Voir tous les documents
+                    </a>
+                </div>
+            {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                    <h6 class="text-muted">Aucun document en attente de révision</h6>
+                    <p class="text-muted">Excellent travail ! Tous les documents ont été révisés.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
