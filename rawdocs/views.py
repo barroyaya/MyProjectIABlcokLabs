@@ -86,7 +86,7 @@ def is_metadonneur(user):
 
 
 def is_annotateur(user):
-    return user.groups.filter(name__in=["Annotateur", "Expert"]).exists()
+    return user.groups.filter(name="Annotateur").exists()
 
 
 def is_expert(user):
@@ -95,18 +95,23 @@ def is_expert(user):
 
 # ——— Authentication ————————————————————————————————————
 
+from django.urls import reverse
+from django.conf import settings
+
 class CustomLoginView(auth_views.LoginView):
     template_name = 'registration/login.html'
 
     def get_success_url(self):
         user = self.request.user
-        grp = user.groups.first().name if user.groups.exists() else None
+        if is_expert(user):
+            return reverse('expert:dashboard')  # adapte au nom de ton URL
+        if is_annotateur(user):
+            return reverse('rawdocs:annotation_dashboard')
+        if is_metadonneur(user):
+            return reverse('rawdocs:dashboard')  # ou 'rawdocs:upload'
+        # fallback
+        return getattr(settings, 'LOGIN_REDIRECT_URL', '/')
 
-        if grp == "Metadonneur":
-            return '/dashboard/'
-        if grp in ("Annotateur", "Expert"):
-            return '/annotation/'
-        return '/upload/'
 
 
 def register(request):
