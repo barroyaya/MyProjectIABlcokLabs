@@ -141,35 +141,6 @@
     </footer>
   </div>
 
-  <!-- Modal for adding new annotation types -->
-  <div class="modal fade" id="addAnnotationTypeModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Add New Annotation Type</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Display Name</label>
-                        <input type="text" class="form-control" id="new-annotation-display-name"
-                              placeholder="e.g., Product, Dosage, Method">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Technical Name (auto-generated)</label>
-                        <input type="text" class="form-control" id="new-annotation-name" >
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="createAnnotationType()">
-                        Create Type
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
 
   <!-- Mobile Menu Toggle (for future implementation) -->
   <div class="mobile-menu-toggle md:hidden fixed top-4 right-4 z-50">
