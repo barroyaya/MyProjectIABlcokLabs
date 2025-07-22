@@ -1,67 +1,760 @@
-{% extends 'expert/base.html' %}
+{% extends 'base.html' %}
+{% load static %}
 
-{% block title %}Expert Dashboard - RegExpert{% endblock %}
+{% block title %}Dashboard Expert - RegExpert{% endblock %}
 {% block page_title %}Dashboard Expert{% endblock %}
 {% block page_subtitle %}Révision et validation des annotations{% endblock %}
 
 {% block content %}
-<!-- Stats -->
-<div class="row mb-4">
-    <div class="col-md-4">
-        <div class="stat-card text-center">
-            <div class="stat-number text-warning">{{ ready_documents_count }}</div>
-            <h6 class="text-muted">Documents à réviser</h6>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="stat-card text-center">
-            <div class="stat-number text-info">{{ pending_annotations }}</div>
-            <h6 class="text-muted">Annotations en attente</h6>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="stat-card text-center">
-            <a href="{% url 'expert:document_list' %}" class="btn btn-primary btn-lg">
-                <i class="fas fa-list me-2"></i>Voir les Documents
-            </a>
-        </div>
-    </div>
-</div>
+<style>
+    :root {
+        --primary: #2c5aa0;
+        --primary-light: #3b6cb7;
+        --secondary: #1a2e4d;
+        --secondary-dark: #0f1d33;
+        --accent: #5d8de8;
+        --text: #f8fafc;
+        --text-secondary: #e2e8f0;
+        --card-bg: rgba(15, 29, 51, 0.7);
+        --card-border: rgba(44, 90, 160, 0.2);
+        --success: #28a745;
+        --success-bg: rgba(40, 167, 69, 0.15);
+        --warning: #ffc107;
+        --warning-bg: rgba(255, 193, 7, 0.15);
+    }
 
-<!-- Recent Documents -->
-<div class="row">
-    <div class="col-12">
-        <div class="stat-card">
-            <h6 class="mb-3">📋 Documents Récents à Réviser</h6>
-            
-            {% if recent_documents %}
-                {% for document in recent_documents %}
-                    <div class="d-flex justify-content-between align-items-center mb-3 p-3 bg-light rounded">
-                        <div>
-                            <strong class="text-dark">{{ document.file.name|truncatechars:50 }}</strong>
-                            <br><small class="text-muted">
-                                <i class="fas fa-calendar me-1"></i>{{ document.validated_at|date:"d/m/Y" }}
-                            </small>
-                        </div>
-                        <a href="{% url 'expert:review_document' document.id %}" class="btn btn-primary">
-                            <i class="fas fa-eye me-1"></i>Réviser
-                        </a>
+    .dashboard-container {
+        max-width: 1400px;
+        margin: 2rem auto;
+        padding: 0 1.5rem;
+    }
+
+    /* Navigation tabs */
+    .nav-tabs {
+        display: flex;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        margin-bottom: 2rem;
+        padding-top: 1rem;
+    }
+
+    .nav-tab {
+        padding: 1rem 1.5rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        border-bottom: 2px solid transparent;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .nav-tab:hover {
+        color: var(--accent);
+    }
+
+    .nav-tab.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+    }
+
+    /* Cards */
+    .card {
+        background: var(--card-bg);
+        backdrop-filter: blur(10px);
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        padding: 1.5rem;
+        transition: all 0.3s ease;
+    }
+
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    }
+
+    .card-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--text);
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    /* Stats */
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--text);
+        line-height: 1;
+    }
+
+    .stat-label {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+        margin-top: 0.5rem;
+    }
+
+    /* Progress bars */
+    .progress-container {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        height: 8px;
+        margin-top: 1rem;
+        overflow: hidden;
+    }
+
+    .progress-bar {
+        height: 100%;
+        border-radius: 8px;
+        transition: width 0.6s ease;
+    }
+
+    /* Document cards */
+    .documents-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+    }
+
+    .document-card {
+        background: var(--card-bg);
+        backdrop-filter: blur(10px);
+        border: 1px solid var(--card-border);
+        border-radius: 16px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        position: relative;
+    }
+
+    .document-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        border-color: rgba(93, 141, 232, 0.4);
+    }
+
+    .doc-badge {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        z-index: 2;
+    }
+
+    .badge-warning {
+        background: var(--warning-bg);
+        color: var(--warning);
+    }
+
+    .badge-success {
+        background: var(--success-bg);
+        color: var(--success);
+    }
+
+    .doc-content {
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    .doc-header {
+        margin-bottom: 1.5rem;
+    }
+
+    .doc-header h3 {
+        margin: 0 0 0.75rem 0;
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: var(--text);
+        line-height: 1.4;
+    }
+
+    .doc-meta {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+    }
+
+    .doc-meta span {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    .doc-footer {
+        margin-top: auto;
+    }
+
+    .doc-progress {
+        margin-bottom: 1.5rem;
+    }
+
+    .progress-info {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 0.5rem;
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+
+    .doc-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 1rem;
+    }
+
+    .doc-date {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    /* Buttons */
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.65rem 1.25rem;
+        border-radius: 8px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        gap: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .btn-primary {
+        background: var(--primary);
+        color: white;
+        border: none;
+    }
+
+    .btn-primary:hover {
+        background: var(--primary-light);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(44, 90, 160, 0.2);
+    }
+
+    .btn-outline {
+        background: transparent;
+        color: var(--accent);
+        border: 1px solid var(--accent);
+    }
+
+    .btn-outline:hover {
+        background: rgba(93, 141, 232, 0.1);
+    }
+
+    /* Empty state */
+    .empty-state {
+        text-align: center;
+        padding: 3rem 2rem;
+        color: var(--text-secondary);
+        max-width: 500px;
+        margin: 0 auto;
+    }
+
+    .empty-icon {
+        font-size: 3.5rem;
+        margin-bottom: 1.5rem;
+        color: rgba(93, 141, 232, 0.3);
+    }
+
+    .empty-state h3 {
+        margin: 1rem 0 0.5rem;
+        color: var(--text);
+        font-size: 1.25rem;
+    }
+
+    /* Pagination */
+    .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 0.75rem;
+        margin-top: 3rem;
+        flex-wrap: wrap;
+    }
+
+    .current-page {
+        font-weight: 500;
+        color: var(--text-secondary);
+        padding: 0 1rem;
+    }
+
+    /* Chart containers */
+    .chart-container {
+        position: relative;
+        width: 100%;
+        height: 300px;
+    }
+
+    /* Animations */
+    @keyframes slideUp {
+        from { transform: translateY(20px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    .animate-slide-up {
+        animation: slideUp 0.4s ease-out forwards;
+    }
+
+    .animate-fade-in {
+        animation: fadeIn 0.5s ease-in-out;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .documents-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .doc-header h3 {
+            font-size: 1.1rem;
+        }
+
+        .grid-cols-4 {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .chart-container {
+            height: 250px;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .grid-cols-4 {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="dashboard-container">
+    <!-- Navigation tabs -->
+    <div class="nav-tabs">
+        <button id="tab-dashboard" class="nav-tab active">
+            <i class="fas fa-tachometer-alt"></i> Dashboard
+        </button>
+        <button id="tab-documents" class="nav-tab">
+            <i class="fas fa-file-alt"></i> Documents à Réviser
+        </button>
+    </div>
+
+    <!-- Dashboard Tab -->
+    <div id="dashboard-tab" class="tab-content block">
+        <h1 class="text-3xl font-bold text-white mb-8">Dashboard Expert</h1>
+
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Documents à Réviser -->
+            <div class="card animate-fade-in">
+                <div class="flex items-center mb-4">
+                    <div class="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center mr-3">
+                        <i class="fas fa-file-circle-check text-blue-400"></i>
                     </div>
-                {% endfor %}
-                
-                <div class="text-center mt-3">
-                    <a href="{% url 'expert:document_list' %}" class="btn btn-outline-primary">
-                        <i class="fas fa-list me-2"></i>Voir tous les documents
+                    <h3 class="text-lg font-semibold text-white">À Réviser</h3>
+                </div>
+                <div class="stat-value text-blue-400">{{ ready_documents_count }}</div>
+                <div class="stat-label">documents prêts</div>
+                <div class="progress-container mt-4">
+                    <div class="progress-bar bg-blue-500" style="width: {% if total_documents > 0 %}{% widthratio ready_documents_count total_documents 100 %}%{% else %}0%{% endif %}"></div>
+                </div>
+            </div>
+
+            <!-- Annotations en Attente -->
+            <div class="card animate-fade-in" style="animation-delay: 0.1s">
+                <div class="flex items-center mb-4">
+                    <div class="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center mr-3">
+                        <i class="fas fa-hourglass-half text-amber-400"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-white">En Attente</h3>
+                </div>
+                <div class="stat-value text-amber-400">{{ pending_annotations }}</div>
+                <div class="stat-label">annotations</div>
+                <div class="progress-container mt-4">
+                    <div class="progress-bar bg-amber-500" style="width: {% if total_annotations > 0 %}{% widthratio pending_annotations total_annotations 100 %}%{% else %}0%{% endif %}"></div>
+                </div>
+            </div>
+
+            <!-- Révisions Complétées -->
+            <div class="card animate-fade-in" style="animation-delay: 0.2s">
+                <div class="flex items-center mb-4">
+                    <div class="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center mr-3">
+                        <i class="fas fa-check-double text-green-400"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-white">Complétées</h3>
+                </div>
+                <div class="stat-value text-green-400">{{ completed_reviews }}</div>
+                <div class="stat-label">révisions</div>
+                <div class="progress-container mt-4">
+                    <div class="progress-bar bg-green-500" style="width: {% if total_reviews > 0 %}{% widthratio completed_reviews total_reviews 100 %}%{% else %}0%{% endif %}"></div>
+                </div>
+            </div>
+
+            <!-- Taux Validation -->
+            <div class="card animate-fade-in" style="animation-delay: 0.3s">
+                <div class="flex items-center mb-4">
+                    <div class="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center mr-3">
+                        <i class="fas fa-percent text-purple-400"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-white">Taux Validation</h3>
+                </div>
+                <div class="stat-value text-purple-400">{{ validation_rate }}%</div>
+                <div class="stat-label">des annotations</div>
+                <div class="mt-4">
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-500/10 text-purple-400">
+                        <i class="fas fa-chart-line mr-2"></i>
+                        Performance
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- Bar Chart -->
+            <div class="card animate-slide-up">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="card-title">
+                        <i class="fas fa-chart-bar text-blue-400"></i>
+                        Activité de Révision
+                    </h2>
+                    <div class="flex space-x-2">
+                        <button class="text-gray-400 hover:text-accent transition-colors">
+                            <i class="fas fa-refresh"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="reviewActivityChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Pie Chart -->
+            <div class="card animate-slide-up" style="animation-delay: 0.1s">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="card-title">
+                        <i class="fas fa-chart-pie text-purple-400"></i>
+                        Statut des Documents
+                    </h2>
+                    <div class="flex space-x-2">
+                        <button class="text-gray-400 hover:text-accent transition-colors">
+                            <i class="fas fa-refresh"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="documentStatusChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Documents -->
+        <div class="card animate-slide-up" style="animation-delay: 0.2s">
+            <h2 class="card-title">
+                <i class="fas fa-file-circle-exclamation text-amber-400"></i>
+                Derniers Documents à Réviser
+            </h2>
+
+            {% if recent_documents %}
+                <div class="documents-grid">
+                    {% for doc in recent_documents|slice:":4" %}
+                    <div class="document-card">
+                        <div class="doc-badge {% if doc.status == 'pending' %}badge-warning{% else %}badge-success{% endif %}">
+                            <i class="fas fa-{% if doc.status == 'pending' %}hourglass-half{% else %}check-circle{% endif %}"></i>
+                            {{ doc.get_status_display }}
+                        </div>
+
+                        <div class="doc-content">
+                            <div class="doc-header">
+                                <h3>{{ doc.file.name|truncatechars:30 }}</h3>
+                                <div class="doc-meta">
+                                    <span><i class="fas fa-file-alt"></i> {{ doc.pages.count }} pages</span>
+                                    <span><i class="fas fa-user"></i> {{ doc.annotator.username }}</span>
+                                </div>
+                            </div>
+
+                            <div class="doc-footer">
+                                <div class="doc-progress">
+                                    <div class="progress-info">
+                                        <span>Annotations</span>
+                                        <span>{{ doc.annotations.count }}</span>
+                                    </div>
+                                    <div class="progress-container">
+                                        <div class="progress-bar bg-amber-500" style="width: {% widthratio doc.annotations.count doc.pages.count 100 %}%"></div>
+                                    </div>
+                                </div>
+
+                                <div class="doc-actions">
+                                    <a href="{% url 'expert:review_document' doc.id %}" class="btn btn-primary">
+                                        <i class="fas fa-magnifying-glass"></i> Réviser
+                                    </a>
+                                    <div class="doc-date">
+                                        <i class="fas fa-calendar"></i> {{ doc.updated_at|date:"d/m/Y" }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="mt-6 text-center">
+                    <a href="#documents-tab" class="btn btn-outline" onclick="switchToDocumentsTab()">
+                        <i class="fas fa-list"></i> Voir tous les documents
                     </a>
                 </div>
             {% else %}
-                <div class="text-center py-4">
-                    <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
-                    <h6 class="text-muted">Aucun document en attente de révision</h6>
-                    <p class="text-muted">Excellent travail ! Tous les documents ont été révisés.</p>
+                <div class="empty-state">
+                    <div class="empty-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <h3>Aucun document à réviser</h3>
+                    <p>Tous les documents ont été validés avec succès.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Documents Tab -->
+    <div id="documents-tab" class="tab-content hidden">
+        <div class="card">
+            <h2 class="card-title">
+                <i class="fas fa-file-alt text-blue-400"></i>
+                Documents à Réviser
+            </h2>
+
+            {% if recent_documents %}
+                <div class="documents-grid">
+                    {% for doc in recent_documents %}
+                    <div class="document-card animate-slide-up" style="animation-delay: {{ forloop.counter0|divisibleby:1|yesno:'0.05,0.1,0.15,0.2,0.25' }}s">
+                        <div class="doc-badge {% if doc.status == 'pending' %}badge-warning{% else %}badge-success{% endif %}">
+                            <i class="fas fa-{% if doc.status == 'pending' %}hourglass-half{% else %}check-circle{% endif %}"></i>
+                            {{ doc.get_status_display }}
+                        </div>
+
+                        <div class="doc-content">
+                            <div class="doc-header">
+                                <h3>{{ doc.file.name|truncatechars:30 }}</h3>
+                                <div class="doc-meta">
+                                    <span><i class="fas fa-file-alt"></i> {{ doc.pages.count }} pages</span>
+                                    <span><i class="fas fa-user"></i> {{ doc.annotator.username }}</span>
+                                </div>
+                            </div>
+
+                            <div class="doc-footer">
+                                <div class="doc-progress">
+                                    <div class="progress-info">
+                                        <span>Annotations</span>
+                                        <span>{{ doc.annotations.count }}</span>
+                                    </div>
+                                    <div class="progress-container">
+                                        <div class="progress-bar bg-amber-500" style="width: {% widthratio doc.annotations.count doc.pages.count 100 %}%"></div>
+                                    </div>
+                                </div>
+
+                                <div class="doc-actions">
+                                    <a href="{% url 'expert:review_document' doc.id %}" class="btn btn-primary">
+                                        <i class="fas fa-magnifying-glass"></i> Réviser
+                                    </a>
+                                    <div class="doc-date">
+                                        <i class="fas fa-calendar"></i> {{ doc.updated_at|date:"d/m/Y" }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Pagination -->
+                {% if recent_documents.has_other_pages %}
+                <div class="pagination">
+                    {% if recent_documents.has_previous %}
+                        <a href="?page=1" class="btn btn-outline">
+                            <i class="fas fa-angle-double-left"></i> Première
+                        </a>
+                        <a href="?page={{ recent_documents.previous_page_number }}" class="btn btn-outline">
+                            <i class="fas fa-angle-left"></i> Précédente
+                        </a>
+                    {% endif %}
+
+                    <span class="current-page">
+                        Page {{ recent_documents.number }} sur {{ recent_documents.paginator.num_pages }}
+                    </span>
+
+                    {% if recent_documents.has_next %}
+                        <a href="?page={{ recent_documents.next_page_number }}" class="btn btn-outline">
+                            Suivante <i class="fas fa-angle-right"></i>
+                        </a>
+                        <a href="?page={{ recent_documents.paginator.num_pages }}" class="btn btn-outline">
+                            Dernière <i class="fas fa-angle-double-right"></i>
+                        </a>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+            {% else %}
+                <div class="empty-state">
+                    <div class="empty-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <h3>Aucun document à réviser</h3>
+                    <p>Tous les documents ont été validés avec succès.</p>
+                    <a href="{% url 'expert:document_list' %}" class="btn btn-primary mt-4">
+                        <i class="fas fa-list"></i> Voir la liste complète
+                    </a>
                 </div>
             {% endif %}
         </div>
     </div>
 </div>
+
+<!-- Chart.js Script -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Tab switching
+    function switchToDocumentsTab() {
+        document.getElementById('documents-tab').classList.remove('hidden');
+        document.getElementById('documents-tab').classList.add('block');
+        document.getElementById('dashboard-tab').classList.add('hidden');
+        document.getElementById('dashboard-tab').classList.remove('block');
+        document.getElementById('tab-documents').classList.add('active');
+        document.getElementById('tab-dashboard').classList.remove('active');
+    }
+
+    document.getElementById('tab-dashboard').addEventListener('click', () => {
+        document.getElementById('dashboard-tab').classList.remove('hidden');
+        document.getElementById('dashboard-tab').classList.add('block');
+        document.getElementById('documents-tab').classList.add('hidden');
+        document.getElementById('documents-tab').classList.remove('block');
+        document.getElementById('tab-dashboard').classList.add('active');
+        document.getElementById('tab-documents').classList.remove('active');
+    });
+
+    document.getElementById('tab-documents').addEventListener('click', () => {
+        switchToDocumentsTab();
+    });
+
+    // Wait for DOM to be fully loaded before initializing charts
+    document.addEventListener('DOMContentLoaded', function() {
+        // Review Activity Chart (Bar)
+        const reviewActivityCtx = document.getElementById('reviewActivityChart');
+        if (reviewActivityCtx) {
+            new Chart(reviewActivityCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['À Réviser', 'En Cours', 'Validés', 'Rejetés'],
+                    datasets: [{
+                        label: 'Documents',
+                        data: [
+                            {{ ready_documents_count|default:0 }},
+                            {{ in_progress_reviews|default:0 }},
+                            {{ completed_reviews|default:0 }},
+                            {{ rejected_documents|default:0 }}
+                        ],
+                        backgroundColor: ['#3b6cb7','#ffc107','#28a745','#dc3545'],
+                        borderColor: ['#2c5aa0','#d39e00','#218838','#c82333'],
+                        borderWidth: 1,
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 29, 51, 0.9)',
+                            titleColor: 'white',
+                            bodyColor: 'white',
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            borderWidth: 1,
+                            cornerRadius: 8,
+                            padding: 12,
+                            displayColors: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#e2e8f0' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#e2e8f0' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Document Status Chart
+        const documentStatusCtx = document.getElementById('documentStatusChart');
+        if (documentStatusCtx) {
+            new Chart(documentStatusCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['À Réviser', 'Validés', 'Rejetés'],
+                    datasets:[{
+                        data: [
+                            {{ ready_documents_count|default:0 }},
+                            {{ completed_reviews|default:0 }},
+                            {{ rejected_documents|default:0 }}
+                        ],
+                        backgroundColor:['#3b6cb7','#28a745','#dc3545'],
+                        borderColor: 'rgba(15, 29, 51, 0.8)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '65%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color:'#e2e8f0',
+                                font:{ size:11 },
+                                padding:20,
+                                usePointStyle:true,
+                                pointStyle:'circle'
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 29, 51, 0.9)',
+                            titleColor: 'white',
+                            bodyColor: 'white',
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            borderWidth: 1,
+                            cornerRadius: 8,
+                            padding: 12
+                        }
+                    }
+                }
+            });
+        }
+    });
+</script>
 {% endblock %}
