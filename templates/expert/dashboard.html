@@ -7,25 +7,29 @@
 
 {% block content %}
 <style>
+    /* Styles harmonisés avec dashboard métadonneur */
     :root {
-        --primary: #2c5aa0;
-        --primary-light: #3b6cb7;
-        --secondary: #1a2e4d;
-        --secondary-dark: #0f1d33;
-        --accent: #5d8de8;
+        --primary: #2563eb;
+        --primary-light: #3b82f6;
+        --secondary: #1e293b;
+        --secondary-dark: #0f172a;
+        --accent: #60a5fa;
         --text: #f8fafc;
         --text-secondary: #e2e8f0;
-        --card-bg: rgba(15, 29, 51, 0.7);
-        --card-border: rgba(44, 90, 160, 0.2);
-        --success: #28a745;
-        --success-bg: rgba(40, 167, 69, 0.15);
-        --warning: #ffc107;
-        --warning-bg: rgba(255, 193, 7, 0.15);
+        --card-bg: rgba(15, 23, 42, 0.7);
+        --card-border: rgba(59, 130, 246, 0.2);
+        --success: #10b981;
+        --success-bg: rgba(16, 185, 129, 0.15);
+        --warning: #f59e0b;
+        --warning-bg: rgba(245, 158, 11, 0.15);
+        --danger: #ef4444;
+        --danger-bg: rgba(239, 68, 68, 0.15);
     }
 
+    /* Espacement accru sous la navbar */
     .dashboard-container {
-        max-width: 1400px;
-        margin: 2rem auto;
+        max-width: 1200px;
+        margin: 2rem auto 0;
         padding: 0 1.5rem;
     }
 
@@ -115,7 +119,7 @@
     /* Document cards */
     .documents-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
         gap: 1.5rem;
         margin-top: 1.5rem;
     }
@@ -124,7 +128,7 @@
         background: var(--card-bg);
         backdrop-filter: blur(10px);
         border: 1px solid var(--card-border);
-        border-radius: 16px;
+        border-radius: 12px;
         overflow: hidden;
         transition: all 0.3s ease;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
@@ -134,7 +138,7 @@
     .document-card:hover {
         transform: translateY(-5px);
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-        border-color: rgba(93, 141, 232, 0.4);
+        border-color: rgba(96, 165, 250, 0.4);
     }
 
     .doc-badge {
@@ -159,6 +163,11 @@
     .badge-success {
         background: var(--success-bg);
         color: var(--success);
+    }
+
+    .badge-danger {
+        background: var(--danger-bg);
+        color: var(--danger);
     }
 
     .doc-content {
@@ -246,7 +255,7 @@
     .btn-primary:hover {
         background: var(--primary-light);
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(44, 90, 160, 0.2);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
     }
 
     .btn-outline {
@@ -256,7 +265,7 @@
     }
 
     .btn-outline:hover {
-        background: rgba(93, 141, 232, 0.1);
+        background: rgba(96, 165, 250, 0.1);
     }
 
     /* Empty state */
@@ -271,7 +280,7 @@
     .empty-icon {
         font-size: 3.5rem;
         margin-bottom: 1.5rem;
-        color: rgba(93, 141, 232, 0.3);
+        color: rgba(96, 165, 250, 0.3);
     }
 
     .empty-state h3 {
@@ -479,8 +488,8 @@
                 <div class="documents-grid">
                     {% for doc in recent_documents|slice:":4" %}
                     <div class="document-card">
-                        <div class="doc-badge {% if doc.status == 'pending' %}badge-warning{% else %}badge-success{% endif %}">
-                            <i class="fas fa-{% if doc.status == 'pending' %}hourglass-half{% else %}check-circle{% endif %}"></i>
+                        <div class="doc-badge {% if doc.status == 'pending' %}badge-warning{% elif doc.status == 'rejected' %}badge-danger{% else %}badge-success{% endif %}">
+                            <i class="fas fa-{% if doc.status == 'pending' %}hourglass-half{% elif doc.status == 'rejected' %}times-circle{% else %}check-circle{% endif %}"></i>
                             {{ doc.get_status_display }}
                         </div>
 
@@ -547,8 +556,8 @@
                 <div class="documents-grid">
                     {% for doc in recent_documents %}
                     <div class="document-card animate-slide-up" style="animation-delay: {{ forloop.counter0|divisibleby:1|yesno:'0.05,0.1,0.15,0.2,0.25' }}s">
-                        <div class="doc-badge {% if doc.status == 'pending' %}badge-warning{% else %}badge-success{% endif %}">
-                            <i class="fas fa-{% if doc.status == 'pending' %}hourglass-half{% else %}check-circle{% endif %}"></i>
+                        <div class="doc-badge {% if doc.status == 'pending' %}badge-warning{% elif doc.status == 'rejected' %}badge-danger{% else %}badge-success{% endif %}">
+                            <i class="fas fa-{% if doc.status == 'pending' %}hourglass-half{% elif doc.status == 'rejected' %}times-circle{% else %}check-circle{% endif %}"></i>
                             {{ doc.get_status_display }}
                         </div>
 
@@ -672,8 +681,8 @@
                             {{ completed_reviews|default:0 }},
                             {{ rejected_documents|default:0 }}
                         ],
-                        backgroundColor: ['#3b6cb7','#ffc107','#28a745','#dc3545'],
-                        borderColor: ['#2c5aa0','#d39e00','#218838','#c82333'],
+                        backgroundColor: ['#3b82f6','#f59e0b','#10b981','#ef4444'],
+                        borderColor: ['#2563eb','#d97706','#047857','#dc3545'],
                         borderWidth: 1,
                         borderRadius: 6
                     }]
@@ -684,7 +693,7 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: {
-                            backgroundColor: 'rgba(15, 29, 51, 0.9)',
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
                             titleColor: 'white',
                             bodyColor: 'white',
                             borderColor: 'rgba(255, 255, 255, 0.1)',
@@ -722,8 +731,8 @@
                             {{ completed_reviews|default:0 }},
                             {{ rejected_documents|default:0 }}
                         ],
-                        backgroundColor:['#3b6cb7','#28a745','#dc3545'],
-                        borderColor: 'rgba(15, 29, 51, 0.8)',
+                        backgroundColor:['#3b82f6','#10b981','#ef4444'],
+                        borderColor: 'rgba(15, 23, 42, 0.8)',
                         borderWidth: 2
                     }]
                 },
@@ -743,7 +752,7 @@
                             }
                         },
                         tooltip: {
-                            backgroundColor: 'rgba(15, 29, 51, 0.9)',
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
                             titleColor: 'white',
                             bodyColor: 'white',
                             borderColor: 'rgba(255, 255, 255, 0.1)',

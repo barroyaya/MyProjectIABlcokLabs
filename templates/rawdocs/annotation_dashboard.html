@@ -4,6 +4,7 @@
 
 {% block content %}
 <style>
+    /* Styles harmonisés avec base_auth */
     :root {
         --primary: #2563eb;
         --primary-light: #3b82f6;
@@ -18,9 +19,10 @@
         --success-bg: rgba(16, 185, 129, 0.15);
     }
 
+    /* Espacement accru sous la navbar */
     .dashboard-container {
-        max-width: 1400px;
-        margin: 2rem auto;
+        max-width: 1200px;
+        margin: 2rem auto 0;
         padding: 0 1.5rem;
     }
 
@@ -110,7 +112,7 @@
     /* Document cards */
     .documents-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
         gap: 1.5rem;
         margin-top: 1.5rem;
     }
@@ -119,7 +121,7 @@
         background: var(--card-bg);
         backdrop-filter: blur(10px);
         border: 1px solid var(--card-border);
-        border-radius: 16px;
+        border-radius: 12px;
         overflow: hidden;
         transition: all 0.3s ease;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
@@ -311,7 +313,7 @@
     .chart-container {
         position: relative;
         width: 100%;
-        height: 300px; /* Hauteur fixe pour des graphiques carrés */
+        height: 300px;
     }
 
     /* Animations */
@@ -440,7 +442,7 @@
             </div>
         </div>
 
-        <!-- Charts Row - Modifié pour des graphiques carrés -->
+        <!-- Charts Row -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <!-- Bar Chart -->
             <div class="card animate-slide-up">
