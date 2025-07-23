@@ -157,4 +157,6 @@ urlpatterns = [
         views.create_annotation_type,
         name='create_annotation_type'
     ),
+    path('delete-annotation-type/', views.delete_annotation_type, name='delete_annotation_type'),
+
 ]

@@ -458,3 +458,167 @@ def create_annotation_type_ajax(request):
             return JsonResponse({'success': False, 'error': str(e)})
 
     return JsonResponse({'success': False, 'error': 'Method not allowed'})
+
+
+def create_product_from_annotations(document):
+    """Create a product in client module from validated annotations"""
+    from client.products.models import Product, ProductSpecification, ManufacturingSite
+
+    # Get all validated annotations from this document
+    validated_annotations = Annotation.objects.filter(
+        page__document=document,
+        validation_status__in=['validated', 'expert_created']
+    )
+
+    # Group annotations by type
+    annotations_by_type = {}
+    for annotation in validated_annotations:
+        annotation_type = annotation.annotation_type.name.lower()
+        if annotation_type not in annotations_by_type:
+            annotations_by_type[annotation_type] = []
+        annotations_by_type[annotation_type].append(annotation.selected_text.strip())
+
+    # Extract product information
+    product_data = {
+        'name': annotations_by_type.get('product', [''])[0] or 'Unknown Product',
+        'dosage': annotations_by_type.get('dosage', [''])[0] or 'N/A',
+        'active_ingredient': annotations_by_type.get('substance_active', ['N/A'])[0],
+        'form': 'Comprimé',
+        'therapeutic_area': 'N/A',
+        'status': 'commercialise'
+    }
+
+    # Process sites data - match each site with address and country
+    sites = annotations_by_type.get('site', [])
+    addresses = annotations_by_type.get('adresse', []) + annotations_by_type.get('address', [])
+    countries = annotations_by_type.get('pays', []) + annotations_by_type.get('country', [])
+
+    sites_data = []
+    max_sites = max(len(sites), len(addresses), len(countries))
+
+    for i in range(max_sites):
+        site_name = sites[i] if i < len(sites) else f'Site {i + 1}'
+        address = addresses[i] if i < len(addresses) else 'N/A'
+        country = countries[i] if i < len(countries) else 'N/A'
+
+        sites_data.append({
+            'site_name': site_name,
+            'country': country,
+            'city': address,  # Using address as city for now
+            'gmp_certified': False
+        })
+
+    print(f"DEBUG: Creating product '{product_data['name']}' with {len(sites_data)} sites")
+    for site in sites_data:
+        print(f"DEBUG: Site - {site['site_name']} in {site['country']}, {site['city']}")
+
+    # Create product if we have minimum required info
+    if product_data['name'] and product_data['name'] != 'Unknown Product':
+        try:
+            product = Product.objects.create(
+                name=product_data['name'],
+                active_ingredient=product_data['active_ingredient'],
+                dosage=product_data['dosage'],
+                form=product_data['form'],
+                therapeutic_area=product_data['therapeutic_area'],
+                status=product_data['status']
+            )
+
+            # Create manufacturing sites
+            for site_data in sites_data:
+                ManufacturingSite.objects.create(
+                    product=product,
+                    site_name=site_data['site_name'],
+                    country=site_data['country'],
+                    city=site_data['city'],
+                    gmp_certified=site_data['gmp_certified']
+                )
+                print(f"DEBUG: Created site: {site_data['site_name']}")
+
+            return product
+
+        except Exception as e:
+            print(f"Error creating product: {e}")
+            return None
+
+    return None
+
+
+@expert_required
+def validate_document(request, document_id):
+    """Validate entire document and create product if it's a manufacturer document"""
+    if request.method == 'POST':
+        try:
+            document = get_object_or_404(RawDocument, id=document_id)
+
+            # Debug: Check document type
+            print(f"DEBUG: Document type = '{document.doc_type}'")
+
+            # Create product from annotations
+            product = create_product_from_annotations(document)
+
+            if product:
+                messages.success(
+                    request,
+                    f'🎉 Document validé avec succès! Le produit "{product.name}" a été créé dans le module client.'
+                )
+
+                # Log the action
+                log_expert_action(
+                    user=request.user,
+                    action='document_validated_product_created',
+                    annotation=None,
+                    document_id=document.id,
+                    document_title=document.file.name,
+                    reason=f"Document validated and product created: {product.name}"
+                )
+
+                return redirect('expert:document_list')
+            else:
+                # Get detailed debug info
+                debug_info = debug_annotations_for_product(document)
+                messages.warning(
+                    request,
+                    f'❌ Produit non créé. Détails: {debug_info}'
+                )
+
+            return redirect('expert:document_list')
+
+        except Exception as e:
+            messages.error(request, f'❌ Erreur lors de la validation: {str(e)}')
+            return redirect('expert:review_document', document_id=document_id)
+
+    return redirect('expert:review_document', document_id=document_id)
+
+
+def debug_annotations_for_product(document):
+    """Debug function to show what annotations are available"""
+    validated_annotations = Annotation.objects.filter(
+        page__document=document,
+        validation_status__in=['validated', 'expert_created']
+    )
+
+    debug_info = []
+    debug_info.append(f"Doc type: '{document.doc_type}'")
+    debug_info.append(f"Total annotations: {validated_annotations.count()}")
+
+    # Check what annotation types we have
+    annotation_types = {}
+    for annotation in validated_annotations:
+        annotation_type = annotation.annotation_type.name.lower()
+        if annotation_type not in annotation_types:
+            annotation_types[annotation_type] = []
+        annotation_types[annotation_type].append(annotation.selected_text)
+
+    debug_info.append(f"Available types: {list(annotation_types.keys())}")
+
+    # Check for required fields
+    has_product = 'product' in annotation_types
+    has_dosage = 'dosage' in annotation_types
+    has_site = 'site' in annotation_types
+
+    debug_info.append(f"Has product: {has_product}")
+    debug_info.append(f"Has dosage: {has_dosage}")
+    debug_info.append(f"Has site: {has_site}")
+
+    return " | ".join(debug_info)

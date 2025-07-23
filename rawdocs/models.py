@@ -195,6 +195,21 @@ class Annotation(models.Model):
         return f"{self.annotation_type.display_name}: '{sel}'"
 
 
+class UserProfile(models.Model):
+    ROLE_CHOICES = [
+        ('metadonneur', 'Métadonneur'),
+        ('annotateur', 'Annotateur'),
+        ('expert', 'Expert'),
+        ('client', 'Client'),
+    ]
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='client')
+
+    def __str__(self):
+        return f"{self.user.username} - {self.role}"
+
+
 class AnnotationSession(models.Model):
     """Session d'annotation pour analytics."""
     document = models.ForeignKey(RawDocument, on_delete=models.CASCADE, related_name='annotation_sessions')

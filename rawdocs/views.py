@@ -48,6 +48,7 @@ class RegisterForm(UserCreationForm):
         ("Metadonneur", "Métadonneur"),
         ("Annotateur", "Annotateur"),
         ("Expert", "Expert"),
+        ("Client", "Client"),  # ADD THIS LINE
     ], label="Profil")
 
     class Meta:
@@ -57,7 +58,7 @@ class RegisterForm(UserCreationForm):
     def save(self, commit=True):
         user = super().save(commit)
         user.email = self.cleaned_data["email"]
-        group = Group.objects.get(name=self.cleaned_data["role"])
+        group = Group.objects.get_or_create(name=self.cleaned_data["role"])[0]  # CHANGE THIS LINE
         user.groups.add(group)
         if commit:
             user.save()
@@ -98,20 +99,21 @@ def is_expert(user):
 from django.urls import reverse
 from django.conf import settings
 
+
 class CustomLoginView(auth_views.LoginView):
     template_name = 'registration/login.html'
 
     def get_success_url(self):
         user = self.request.user
-        if is_expert(user):
-            return reverse('expert:dashboard')  # adapte au nom de ton URL
-        if is_annotateur(user):
+        if user.groups.filter(name='Client').exists():
+            return '/client/'  # We'll create this
+        if user.groups.filter(name='Expert').exists():
+            return reverse('expert:dashboard')
+        if user.groups.filter(name='Annotateur').exists():
             return reverse('rawdocs:annotation_dashboard')
-        if is_metadonneur(user):
-            return reverse('rawdocs:dashboard')  # ou 'rawdocs:upload'
-        # fallback
-        return getattr(settings, 'LOGIN_REDIRECT_URL', '/')
-
+        if user.groups.filter(name='Metadonneur').exists():
+            return reverse('rawdocs:dashboard')
+        return '/'
 
 
 def register(request):
@@ -668,4 +670,50 @@ def create_annotation_type(request):
         })
 
     except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@csrf_exempt
+def delete_annotation_type(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        type_id = data.get('type_id')
+
+        if not type_id:
+            return JsonResponse({'error': 'Type ID required'}, status=400)
+
+        # Get the annotation type
+        annotation_type = get_object_or_404(AnnotationType, id=type_id)
+
+        # Count how many annotations will be deleted
+        annotation_count = Annotation.objects.filter(annotation_type=annotation_type).count()
+
+        display_name = annotation_type.display_name
+
+        # FORCE DELETE: Delete all annotations using this type first
+        if annotation_count > 0:
+            deleted_annotations = Annotation.objects.filter(annotation_type=annotation_type).delete()
+            print(f"🗑️ Deleted {annotation_count} annotations of type '{display_name}'")
+
+        # Now delete the annotation type itself
+        annotation_type.delete()
+
+        # Create success message
+        if annotation_count > 0:
+            message = f'Annotation type "{display_name}" and {annotation_count} associated annotation(s) deleted successfully!'
+        else:
+            message = f'Annotation type "{display_name}" deleted successfully!'
+
+        return JsonResponse({
+            'success': True,
+            'message': message,
+            'deleted_annotations': annotation_count
+        })
+
+    except Exception as e:
+        print(f"❌ Error deleting annotation type: {e}")
         return JsonResponse({'error': str(e)}, status=500)

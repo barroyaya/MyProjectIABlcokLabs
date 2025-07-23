@@ -9,6 +9,7 @@ urlpatterns = [
     path('', views.ExpertDashboardView.as_view(), name='dashboard'),
     path('documents/', views.DocumentReviewListView.as_view(), name='document_list'),
     path('review/<int:document_id>/', views.DocumentReviewView.as_view(), name='review_document'),
+    path('validate-document/<int:document_id>/', views.validate_document, name='validate_document'),
     path('api/validate/<int:annotation_id>/', views.validate_annotation_ajax, name='validate_annotation'),
     path('api/create-annotation/', views.create_annotation_ajax, name='create_annotation'),
     path('api/modify/<int:annotation_id>/', views.modify_annotation_ajax, name='modify_annotation'),
