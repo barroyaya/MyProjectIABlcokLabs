@@ -12,6 +12,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.contrib.auth.decorators import user_passes_test
 import uuid
+from django.http import JsonResponse, HttpResponse
+from client.products.models import Product, ProductSpecification, ManufacturingSite
 import json
 
 from .models import ExpertLog
@@ -515,14 +517,20 @@ def create_product_from_annotations(document):
     # Create product if we have minimum required info
     if product_data['name'] and product_data['name'] != 'Unknown Product':
         try:
+            print(f"DEBUG: About to create product with document ID: {document.id}")
+            print(f"DEBUG: Document object: {document}")
+
             product = Product.objects.create(
                 name=product_data['name'],
                 active_ingredient=product_data['active_ingredient'],
                 dosage=product_data['dosage'],
                 form=product_data['form'],
                 therapeutic_area=product_data['therapeutic_area'],
-                status=product_data['status']
+                status=product_data['status'],
+                source_document=document
             )
+
+            print(f"DEBUG: Product created with source_document: {product.source_document}")
 
             # Create manufacturing sites
             for site_data in sites_data:
@@ -622,3 +630,29 @@ def debug_annotations_for_product(document):
     debug_info.append(f"Has site: {has_site}")
 
     return " | ".join(debug_info)
+
+@expert_required
+def view_original_document(request, document_id):
+    """View the original document PDF"""
+    document = get_object_or_404(RawDocument, id=document_id)
+    
+    # Check if document file exists
+    if document.file:
+        try:
+            # Serve the PDF file directly in browser
+            response = HttpResponse(document.file.read(), content_type='application/pdf')
+            response['Content-Disposition'] = f'inline; filename="{document.file.name}"'
+            return response
+        except:
+            # If file doesn't exist, show error
+            return HttpResponse(
+                "<html><body><h2>Erreur</h2>"
+                "<p>Le fichier PDF n'a pas pu être chargé.</p>"
+                "<script>window.close();</script></body></html>"
+            )
+    else:
+        return HttpResponse(
+            "<html><body><h2>Aucun fichier disponible</h2>"
+            "<p>Ce document n'a pas de fichier PDF associé.</p>"
+            "<script>window.close();</script></body></html>"
+        )
