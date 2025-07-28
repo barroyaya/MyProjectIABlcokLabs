@@ -691,23 +691,60 @@ body {
   color: #92400e;
 }
 
-.text-content {
-  border: 2px dashed var(--pharma-primary);
-  border-radius: var(--pharma-radius-sm);
-  background: #e0f2fe;
-  color: var(--pharma-primary-dark);
-  padding: 1.6rem 1.2rem;
-  font-size: 1.14rem;
-  line-height: 1.7;
-  user-select: text;
-  cursor: text;
-  min-height: 220px;
-  box-shadow: 0 2px 6px rgba(56,189,248,0.05);
-  transition: box-shadow .2s;
-}
-.text-content:focus, .text-content:hover {
-  box-shadow: 0 6px 26px rgba(14,165,233,0.13);
-}
+/* Text content - Enhanced for PDF-like appearance */
+  .text-content {
+    background: #fafbfc;
+    border: 1px solid var(--pharma-border);
+    border-radius: 12px;
+    padding: 2rem;
+    line-height: 1.8;
+    font-size: 1.05rem;
+    color: var(--pharma-text);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    min-height: 400px;
+    cursor: text;
+    font-family: 'Inter', 'Georgia', 'Times New Roman', serif;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    hyphens: auto;
+    text-align: justify;
+    text-justify: inter-word;
+    letter-spacing: 0.01em;
+    word-spacing: 0.05em;
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.05);
+    border: 2px solid rgba(59, 130, 246, 0.1);
+    transition: border-color 0.3s ease;
+  }
+
+  .text-content:hover {
+    border-color: rgba(59, 130, 246, 0.2);
+  }
+
+  /* Add visual structure for better readability */
+  .text-content::before {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(to right, 
+      transparent, 
+      rgba(59, 130, 246, 0.2), 
+      transparent
+    );
+    margin-bottom: 1.5rem;
+  }
+
+  /* Enhanced paragraph spacing for PDF-like structure */
+  .text-content p {
+    margin-bottom: 1.2rem;
+    text-indent: 1.5rem;
+  }
+
+  .text-content p:first-child {
+    text-indent: 0;
+  }
 
 /* Annotations List (as cards) */
 .annotations-list {
