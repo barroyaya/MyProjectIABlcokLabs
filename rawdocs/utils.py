@@ -101,9 +101,9 @@ def call_mistral_with_confidence(text_chunk, document_url="", filename=""):
         - "authorization": Marketing authorizations, permits, licenses
         - "other": Any other document type
 
-
+                
         RULES FOR PUBLICATION DATE DETECTION:
-
+                
         Use the date that appears:
         - At the top near the agency name (e.g. “EMA/CHMP/ICH/24235/2006 Corr.2 23 January 2025” → use 23 January 2025)
         - In the format “Published: ...” or “Publication date: ...”
@@ -142,7 +142,7 @@ def call_mistral_with_confidence(text_chunk, document_url="", filename=""):
 
         INSTRUCTIONS FOR VERSION DETECTION:
 
-
+        
         1. If a regulatory code is present like:
         - EMA/CHMP/ICH/xxxxx/yyyy
         - ICH/yyyy/stepX
@@ -204,6 +204,7 @@ def call_mistral_with_confidence(text_chunk, document_url="", filename=""):
 
         Return ONLY the JSON, no other text.
         """
+
 
         data = {
             "model": "mistral-large-latest",
@@ -267,7 +268,6 @@ def calculate_overall_quality(confidence_scores):
 
 
 import pdfplumber
-
 
 def extract_full_text(file_path):
     text = ""
