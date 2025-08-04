@@ -425,48 +425,48 @@ div.container-fluid.py-4 div.document-header div.document-meta div.meta-item i,
         padding: 2rem 1.5rem;
         margin-bottom: 2rem;
     }
-
+    
     .document-title {
         font-size: 1.75rem;
         flex-direction: column;
         text-align: center;
         gap: 1rem;
     }
-
+    
     .document-title i {
         width: 50px;
         height: 50px;
         font-size: 1.25rem;
     }
-
+    
     .document-meta {
         flex-direction: column;
         gap: 0.75rem;
     }
-
+    
     .meta-item {
         justify-content: center;
     }
-
+    
     .summary-cards {
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         gap: 1rem;
         margin-bottom: 2rem;
     }
-
+    
     .summary-card {
         padding: 1.5rem;
     }
-
+    
     .summary-number {
         font-size: 2.5rem;
     }
-
+    
     .action-buttons {
         flex-direction: column;
         gap: 0.75rem;
     }
-
+    
     .btn-action {
         justify-content: center;
         padding: 0.875rem 1.5rem;
@@ -707,14 +707,14 @@ div.container-fluid.py-4 div.action-buttons button.btn-action:hover {
             <i class="fas fa-arrow-left"></i>
             Retour aux documents
         </a>
-
+        
         {% if summary.total_tables > 0 %}
         <a href="{% url 'rawdocs:export_tables_excel' document.id %}" class="btn-action btn-success-custom" style="padding: 1rem 2rem !important; border-radius: 12px !important; font-weight: 600 !important; text-decoration: none !important; transition: all 0.3s ease !important; display: inline-flex !important; align-items: center !important; gap: 0.75rem !important; font-size: 0.95rem !important; border: none !important; cursor: pointer !important; background: linear-gradient(135deg, #059669, #10b981) !important; color: white !important; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;">
             <i class="fas fa-file-excel"></i>
             Exporter les tableaux (Excel)
         </a>
         {% endif %}
-
+        
         <button class="btn-action btn-primary-custom" onclick="window.print()" style="padding: 1rem 2rem !important; border-radius: 12px !important; font-weight: 600 !important; text-decoration: none !important; transition: all 0.3s ease !important; display: inline-flex !important; align-items: center !important; gap: 0.75rem !important; font-size: 0.95rem !important; border: none !important; cursor: pointer !important; background: linear-gradient(135deg, #2563eb, #1d4ed8) !important; color: white !important; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;">
             <i class="fas fa-print"></i>
             Imprimer
@@ -767,11 +767,11 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => {
                 this.style.transform = 'scale(1)';
             }, 150);
-
+            
             // Afficher le toast de téléchargement
             const toast = new bootstrap.Toast(document.getElementById('downloadToast'));
             toast.show();
-
+            
             // Feedback visuel temporaire
             const originalText = this.innerHTML;
             this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Génération...';
@@ -783,13 +783,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 1000);
         });
     }
-
+    
     // Animation des statistiques au chargement
     document.querySelectorAll('.summary-number').forEach(stat => {
         const finalValue = parseInt(stat.textContent);
         let currentValue = 0;
         const increment = finalValue / 40;
-
+        
         const timer = setInterval(() => {
             currentValue += increment;
             if (currentValue >= finalValue) {
@@ -800,13 +800,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }, 30);
     });
-
+    
     // Animation d'entrée pour les éléments
     const observerOptions = {
         threshold: 0.1,
         rootMargin: '0px 0px -50px 0px'
     };
-
+    
     const observer = new IntersectionObserver(function(entries) {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
@@ -815,7 +815,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }, observerOptions);
-
+    
     // Observer les conteneurs de tableaux et images
     document.querySelectorAll('.table-container, .image-container').forEach(el => {
         el.style.opacity = '0';
@@ -823,26 +823,26 @@ document.addEventListener('DOMContentLoaded', function() {
         el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
         observer.observe(el);
     });
-
+    
     // Amélioration des boutons d'action
     document.querySelectorAll('.btn-action').forEach(button => {
         button.addEventListener('mouseenter', function() {
             this.style.transform = 'translateY(-2px) scale(1.02)';
         });
-
+        
         button.addEventListener('mouseleave', function() {
             this.style.transform = 'translateY(0) scale(1)';
         });
-
+        
         button.addEventListener('mousedown', function() {
             this.style.transform = 'translateY(0) scale(0.98)';
         });
-
+        
         button.addEventListener('mouseup', function() {
             this.style.transform = 'translateY(-2px) scale(1.02)';
         });
     });
-
+    
     // Amélioration des boutons de téléchargement d'images (nouveau sélecteur)
     document.querySelectorAll('.download-btn').forEach(button => {
         button.addEventListener('click', function() {
@@ -851,7 +851,7 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => {
                 this.style.transform = 'scale(1)';
             }, 150);
-
+            
             // Feedback visuel
             const originalText = this.innerHTML;
             this.innerHTML = '<i class="fas fa-check"></i><span>Téléchargé!</span>';
@@ -860,35 +860,35 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 2000);
         });
     });
-
+    
     // Effet de parallaxe léger sur l'en-tête
     window.addEventListener('scroll', function() {
         const scrolled = window.pageYOffset;
         const header = document.querySelector('.document-header');
-
+        
         if (header) {
             const rate = scrolled * -0.3;
             header.style.transform = `translateY(${rate}px)`;
         }
     });
-
+    
     // Animation des cartes de résumé au survol
     document.querySelectorAll('.summary-card').forEach(card => {
         card.addEventListener('mouseenter', function() {
             this.style.transform = 'translateY(-8px) scale(1.02)';
         });
-
+        
         card.addEventListener('mouseleave', function() {
             this.style.transform = 'translateY(0) scale(1)';
         });
     });
-
+    
     // Animation des meta-items
     document.querySelectorAll('.meta-item').forEach(item => {
         item.addEventListener('mouseenter', function() {
             this.style.transform = 'translateY(-3px) scale(1.05)';
         });
-
+        
         item.addEventListener('mouseleave', function() {
             this.style.transform = 'translateY(0) scale(1)';
         });

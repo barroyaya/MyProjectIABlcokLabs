@@ -14,34 +14,34 @@ class TableImageExtractor:
     Extracteur avancé pour tableaux et images depuis PDF
     Préserve la structure des tableaux et extrait les images
     """
-
+    
     def __init__(self, pdf_path: str):
         self.pdf_path = pdf_path
         self.tables = []
         self.images = []
-
+        
     def extract_tables_with_structure(self) -> List[Dict]:
         """
         Extrait les tableaux en préservant leur structure HTML
         """
         tables_data = []
-
+        
         with pdfplumber.open(self.pdf_path) as pdf:
             for page_num, page in enumerate(pdf.pages, 1):
                 # Extraire les tableaux de la page
                 page_tables = page.extract_tables()
-
+                
                 for table_num, table in enumerate(page_tables, 1):
                     if table and len(table) > 1:  # Vérifier qu'il y a au moins 2 lignes
                         # Convertir en DataFrame pour faciliter la manipulation
                         df = pd.DataFrame(table[1:], columns=table[0])
-
+                        
                         # Nettoyer les données
                         df = df.fillna('')
-
+                        
                         # Générer HTML stylisé
                         html_table = self._generate_styled_html_table(df, page_num, table_num)
-
+                        
                         table_info = {
                             'page': page_num,
                             'table_number': table_num,
@@ -51,18 +51,18 @@ class TableImageExtractor:
                             'rows': len(df),
                             'columns': len(df.columns)
                         }
-
+                        
                         tables_data.append(table_info)
-
+                        
         self.tables = tables_data
         return tables_data
-
+    
     def _generate_styled_html_table(self, df: pd.DataFrame, page_num: int, table_num: int) -> str:
         """
         Génère un tableau HTML stylisé avec CSS moderne
         """
         table_id = f"table_page_{page_num}_num_{table_num}"
-
+        
         html = f"""
         <div class="table-container" id="{table_id}">
             <div class="table-header">
@@ -94,17 +94,17 @@ class TableImageExtractor:
                     <thead>
                         <tr>
         """
-
+        
         # En-têtes
         for col in df.columns:
             html += f'<th class="table-header-cell">{self._clean_cell_text(str(col))}</th>'
-
+        
         html += """
                         </tr>
                     </thead>
                     <tbody>
         """
-
+        
         # Lignes de données
         for _, row in df.iterrows():
             html += '<tr>'
@@ -112,58 +112,58 @@ class TableImageExtractor:
                 cleaned_cell = self._clean_cell_text(str(cell))
                 html += f'<td class="table-data-cell">{cleaned_cell}</td>'
             html += '</tr>'
-
+        
         html += """
                     </tbody>
                 </table>
             </div>
         </div>
         """
-
+        
         return html
-
+    
     def _clean_cell_text(self, text: str) -> str:
         """
         Nettoie le texte des cellules
         """
         if not text or text == 'nan':
             return ''
-
+        
         # Supprimer les espaces multiples
         text = re.sub(r'\s+', ' ', text.strip())
-
+        
         # Remplacer les caractères spéciaux
         text = text.replace('\n', '<br>')
-
+        
         return text
-
+    
     def extract_images(self) -> List[Dict]:
         """
         Extrait les images du PDF avec métadonnées
         """
         images_data = []
-
+        
         try:
             # Utiliser PyMuPDF pour l'extraction d'images
             doc = fitz.open(self.pdf_path)
-
+            
             for page_num in range(len(doc)):
                 page = doc.load_page(page_num)
                 image_list = page.get_images()
-
+                
                 for img_index, img in enumerate(image_list):
                     try:
                         # Extraire l'image
                         xref = img[0]
                         pix = fitz.Pixmap(doc, xref)
-
+                        
                         if pix.n - pix.alpha < 4:  # GRAY ou RGB
                             # Convertir en PNG
                             img_data = pix.tobytes("png")
-
+                            
                             # Encoder en base64 pour l'affichage web
                             img_base64 = base64.b64encode(img_data).decode()
-
+                            
                             # Métadonnées de l'image
                             img_info = {
                                 'page': page_num + 1,
@@ -173,32 +173,31 @@ class TableImageExtractor:
                                 'base64': img_base64,
                                 'format': 'PNG',
                                 'size_kb': len(img_data) // 1024,
-                                'html': self._generate_image_html(img_base64, page_num + 1, img_index + 1, pix.width,
-                                                                  pix.height)
+                                'html': self._generate_image_html(img_base64, page_num + 1, img_index + 1, pix.width, pix.height)
                             }
-
+                            
                             images_data.append(img_info)
-
+                        
                         pix = None
-
+                        
                     except Exception as e:
                         print(f"Erreur extraction image {img_index} page {page_num + 1}: {e}")
                         continue
-
+            
             doc.close()
-
+            
         except Exception as e:
             print(f"Erreur lors de l'extraction des images: {e}")
-
+        
         self.images = images_data
         return images_data
-
+    
     def _generate_image_html(self, img_base64: str, page_num: int, img_num: int, width: int, height: int) -> str:
         """
         Génère le HTML pour afficher une image extraite
         """
         image_id = f"image_page_{page_num}_num_{img_num}"
-
+        
         html = f"""
         <div class="image-container" id="{image_id}">
             <div class="image-header">
@@ -209,7 +208,7 @@ class TableImageExtractor:
                         </div>
                         <div class="title-text">
                             <h3 class="image-title">Image {img_num}</h3>
-                            <p class="image-subtitle">Page {page_num} • {width}×{height}px • {len(img_base64) // 1024}KB</p>
+                            <p class="image-subtitle">Page {page_num} • {width}×{height}px • {len(img_base64)//1024}KB</p>
                         </div>
                     </div>
                     <div class="actions-section">
@@ -228,9 +227,9 @@ class TableImageExtractor:
             </div>
         </div>
         """
-
+        
         return html
-
+    
     def get_extraction_summary(self) -> Dict:
         """
         Retourne un résumé de l'extraction
@@ -243,7 +242,7 @@ class TableImageExtractor:
             'total_table_rows': sum(table['rows'] for table in self.tables),
             'total_image_size_kb': sum(img['size_kb'] for img in self.images)
         }
-
+    
     def _group_by_page(self, items: List[Dict]) -> Dict[int, int]:
         """
         Groupe les éléments par page
@@ -253,7 +252,7 @@ class TableImageExtractor:
             page = item['page']
             grouped[page] = grouped.get(page, 0) + 1
         return grouped
-
+    
     def export_tables_to_excel(self, output_path: str) -> bool:
         """
         Exporte tous les tableaux vers un fichier Excel
@@ -263,24 +262,24 @@ class TableImageExtractor:
                 for table in self.tables:
                     sheet_name = f"Page_{table['page']}_Table_{table['table_number']}"
                     table['dataframe'].to_excel(writer, sheet_name=sheet_name, index=False)
-
+            
             return True
         except Exception as e:
             print(f"Erreur lors de l'export Excel: {e}")
             return False
-
+    
     def get_combined_html(self) -> str:
         """
         Retourne le HTML combiné de tous les tableaux et images
         """
         html_parts = []
-
+        
         # Ajouter le CSS
         html_parts.append(self._get_css_styles())
-
+        
         # Combiner tableaux et images par page
         all_items = []
-
+        
         for table in self.tables:
             all_items.append({
                 'type': 'table',
@@ -288,7 +287,7 @@ class TableImageExtractor:
                 'number': table['table_number'],
                 'html': table['html']
             })
-
+        
         for image in self.images:
             all_items.append({
                 'type': 'image',
@@ -296,17 +295,17 @@ class TableImageExtractor:
                 'number': image['image_number'],
                 'html': image['html']
             })
-
+        
         # Trier par page puis par numéro
         all_items.sort(key=lambda x: (x['page'], x['number']))
-
+        
         # Générer le HTML final
         current_page = None
         for item in all_items:
             if item['page'] != current_page:
                 if current_page is not None:
                     html_parts.append('</div>')  # Fermer la page précédente
-
+                
                 current_page = item['page']
                 html_parts.append(f"""
                 <div class="page-section">
@@ -320,17 +319,17 @@ class TableImageExtractor:
                         </div>
                     </div>
                 """)
-
+            
             html_parts.append(item['html'])
-
+        
         if current_page is not None:
             html_parts.append('</div>')  # Fermer la dernière page
-
+        
         # Ajouter le JavaScript
         html_parts.append(self._get_javascript())
-
+        
         return '\n'.join(html_parts)
-
+    
     def _get_css_styles(self) -> str:
         """
         Retourne les styles CSS pour l'affichage
@@ -684,7 +683,7 @@ class TableImageExtractor:
         }
         </style>
         """
-
+    
     def _get_javascript(self) -> str:
         """
         Retourne le JavaScript pour les fonctionnalités interactives modernes
@@ -697,19 +696,19 @@ class TableImageExtractor:
                 button.addEventListener('click', function() {
                     const imageData = this.getAttribute('data-image');
                     const filename = this.getAttribute('data-filename');
-
+                    
                     // Animation du bouton
                     this.style.transform = 'scale(0.95)';
                     setTimeout(() => {
                         this.style.transform = 'scale(1)';
                     }, 150);
-
+                    
                     // Créer un lien de téléchargement
                     const link = document.createElement('a');
                     link.href = 'data:image/png;base64,' + imageData;
                     link.download = filename;
                     link.click();
-
+                    
                     // Feedback visuel
                     const originalText = this.innerHTML;
                     this.innerHTML = '<i class="fas fa-check"></i><span>Téléchargé!</span>';
@@ -718,13 +717,13 @@ class TableImageExtractor:
                     }, 2000);
                 });
             });
-
+            
             // Animation d'apparition progressive des éléments
             const observerOptions = {
                 threshold: 0.1,
                 rootMargin: '0px 0px -50px 0px'
             };
-
+            
             const observer = new IntersectionObserver(function(entries) {
                 entries.forEach(entry => {
                     if (entry.isIntersecting) {
@@ -733,7 +732,7 @@ class TableImageExtractor:
                     }
                 });
             }, observerOptions);
-
+            
             // Observer tous les containers
             document.querySelectorAll('.table-container, .image-container').forEach(container => {
                 container.style.opacity = '0';
@@ -741,36 +740,36 @@ class TableImageExtractor:
                 container.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
                 observer.observe(container);
             });
-
+            
             // Amélioration des interactions avec les tableaux
             document.querySelectorAll('.extracted-table tbody tr').forEach(row => {
                 row.addEventListener('mouseenter', function() {
                     this.style.transform = 'translateX(4px)';
                     this.style.transition = 'transform 0.2s ease';
                 });
-
+                
                 row.addEventListener('mouseleave', function() {
                     this.style.transform = 'translateX(0)';
                 });
             });
-
+            
             // Effet de parallaxe léger sur les en-têtes
             window.addEventListener('scroll', function() {
                 const scrolled = window.pageYOffset;
                 const headers = document.querySelectorAll('.page-header');
-
+                
                 headers.forEach(header => {
                     const rate = scrolled * -0.5;
                     header.style.transform = `translateY(${rate}px)`;
                 });
             });
-
+            
             // Animation des statistiques au chargement
             document.querySelectorAll('.stat-number').forEach(stat => {
                 const finalValue = parseInt(stat.textContent);
                 let currentValue = 0;
                 const increment = finalValue / 30;
-
+                
                 const timer = setInterval(() => {
                     currentValue += increment;
                     if (currentValue >= finalValue) {

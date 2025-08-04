@@ -19,7 +19,6 @@ import hashlib
 
 logger = logging.getLogger(__name__)
 
-
 def random_color(name):
     """Génère une couleur unique en fonction du nom de la source."""
     h = int(hashlib.sha256(name.encode()).hexdigest(), 16)
@@ -27,7 +26,6 @@ def random_color(name):
     g = ((h >> 8) % 200) + 30
     b = ((h >> 16) % 200) + 30
     return f'#{r:02x}{g:02x}{b:02x}'
-
 
 # Mapping des synonymes → clé principale + couleurs
 KNOWN_SOURCES = {
@@ -42,7 +40,7 @@ KNOWN_SOURCES = {
         'name': 'FDA'
     },
     'ICH': {
-        'aliases': ['ICH', 'INTERNATIONAL COUNCIL FOR HARMONISATION', 'INTERNATIONAL CONFERENCE ON HARMONISATION'],
+        'aliases': ['ICH', 'INTERNATIONAL COUNCIL FOR HARMONISATION','INTERNATIONAL CONFERENCE ON HARMONISATION'],
         'color': '#f39c12',
         'name': 'ICH'
     },
@@ -59,7 +57,6 @@ KNOWN_SOURCES = {
     # Ajoute ici si tu veux d'autres organismes connus
 }
 
-
 def library_dashboard(request):
     """Vue principale de la library - affiche les documents des métadonneurs"""
     # Utiliser le cache pour les statistiques avec timeout de 5 minutes
@@ -67,15 +64,15 @@ def library_dashboard(request):
     if total_documents is None:
         total_documents = RawDocument.objects.filter(is_validated=True).count()
         cache.set('total_documents', total_documents, 300)  # 5 minutes
-
+    
     pending_validation = RawDocument.objects.filter(is_validated=False).count()
     total_metadonneurs = RawDocument.objects.values('owner').distinct().count()
-
+    
     # Documents récents validés avec métadonnées
     recent_documents = RawDocument.objects.filter(
         is_validated=True
     ).select_related('owner').order_by('-created_at')[:10]
-
+    
     # Statistiques par type de document avec cache
     document_type_stats = cache.get('document_type_stats')
     if document_type_stats is None:
@@ -85,9 +82,9 @@ def library_dashboard(request):
             count=Count('id')
         ).order_by('-count')[:5]
         cache.set('document_type_stats', document_type_stats, 300)
-
+    
     # Statistiques par pays avec cache
-    country_stats = cache.get('country_stats')
+    country_stats = cache.get('country_stats') 
     if country_stats is None:
         country_stats = RawDocument.objects.filter(
             is_validated=True
@@ -95,8 +92,8 @@ def library_dashboard(request):
             count=Count('id')
         ).order_by('-count')[:5]
         cache.set('country_stats', country_stats, 300)
-
-    # Statistiques par source DYNAMIQUE par organisme
+    
+    # Statistiques par source DYNAMIQUE par organisme (incluant les documents clients)
     source_categories = cache.get('source_categories')
     if source_categories is None:
         # Récupérer toutes les sources, y compris les vides
@@ -120,6 +117,15 @@ def library_dashboard(request):
             source_raw = stat['source'] or ''
             source_upper = source_raw.upper().strip()
             count = stat['count']
+
+            # Traitement spécial pour les documents clients
+            if source_upper == 'CLIENT':
+                categories['CLIENT'] = {
+                    'name': 'Client',
+                    'count': count,
+                    'color': '#10b981'  # Couleur verte pour les clients
+                }
+                continue
 
             # Vérifier si c'est une source non spécifiée
             if not source_raw or source_upper in unspecified_terms:
@@ -165,16 +171,15 @@ def library_dashboard(request):
 
     context = {
         'total_documents': total_documents,
-        'pending_validation': pending_validation,
+        'pending_validation': pending_validation, 
         'total_metadonneurs': total_metadonneurs,
         'recent_documents': recent_documents,
         'document_type_stats': document_type_stats,
         'country_stats': country_stats,
         'source_categories': source_categories,  # Catégories dynamiques
     }
-
+    
     return render(request, 'client/library/dashboard.html', context)
-
 
 def document_list(request):
     """Liste des documents RawDocument avec filtrage"""
@@ -183,20 +188,20 @@ def document_list(request):
     country = request.GET.get('country', '')
     language = request.GET.get('language', '')
     validation_status = request.GET.get('status', 'validated')
-
+    
     documents_qs = RawDocument.objects.select_related('owner').all()
     if validation_status == 'validated':
         documents_qs = documents_qs.filter(is_validated=True)
     elif validation_status == 'pending':
         documents_qs = documents_qs.filter(is_validated=False)
-
+    
     if search:
         documents_qs = documents_qs.filter(
-            Q(title__icontains=search) |
+            Q(title__icontains=search) | 
             Q(source__icontains=search) |
             Q(context__icontains=search)
         )
-
+    
     if document_type:
         documents_qs = documents_qs.filter(doc_type__icontains=document_type)
     if country:
@@ -207,14 +212,11 @@ def document_list(request):
     paginator = Paginator(documents_qs, 20)
     page_number = request.GET.get('page')
     documents = paginator.get_page(page_number)
-
-    document_types = RawDocument.objects.filter(is_validated=True).exclude(doc_type='').values_list('doc_type',
-                                                                                                    flat=True).distinct()
-    countries = RawDocument.objects.filter(is_validated=True).exclude(country='').values_list('country',
-                                                                                              flat=True).distinct()
-    languages = RawDocument.objects.filter(is_validated=True).exclude(language='').values_list('language',
-                                                                                               flat=True).distinct()
-
+    
+    document_types = RawDocument.objects.filter(is_validated=True).exclude(doc_type='').values_list('doc_type', flat=True).distinct()
+    countries = RawDocument.objects.filter(is_validated=True).exclude(country='').values_list('country', flat=True).distinct()
+    languages = RawDocument.objects.filter(is_validated=True).exclude(language='').values_list('language', flat=True).distinct()
+    
     context = {
         'documents': documents,
         'document_types': document_types,
@@ -230,28 +232,30 @@ def document_list(request):
     }
     return render(request, 'client/library/document_list.html', context)
 
-
 def documents_by_category(request, category):
-    """Documents filtrés par catégorie de source"""
+    """Documents filtrés par catégorie de source (incluant les documents clients)"""
     # Création du mapping dynamique depuis dashboard
     filter_name = category.upper()
     search = request.GET.get('search', '')
     documents_qs = RawDocument.objects.filter(is_validated=True).select_related('owner')
 
+    # Gestion spéciale pour la catégorie "Client"
+    if filter_name == 'CLIENT':
+        documents_qs = documents_qs.filter(source='Client')
     # Gestion spéciale pour la catégorie "Non spécifié"
-    if filter_name == 'NON_SPECIFIE':
+    elif filter_name == 'NON_SPECIFIE':
         # Termes considérés comme "non spécifié"
         unspecified_terms = [
             '', 'NOT EXPLICITLY STATED', 'NON SPÉCIFIÉ', 'NON SPECIFIE',
             'NOT SPECIFIED', 'UNSPECIFIED', 'UNKNOWN', 'N/A', 'NA',
             'NOT AVAILABLE', 'NON DISPONIBLE', 'AUTRE', 'OTHER'
         ]
-
+        
         # Créer une requête pour tous les termes non spécifiés
         unspecified_query = Q(source__isnull=True) | Q(source='')
         for term in unspecified_terms[1:]:  # Skip empty string as it's already handled
             unspecified_query |= Q(source__iexact=term)
-
+        
         documents_qs = documents_qs.filter(unspecified_query)
     else:
         # Cherche la clé si le nom donné est un alias ou une clé connue
@@ -270,7 +274,7 @@ def documents_by_category(request, category):
             # Sinon, filtre sur la source "exacte" vue dans la clé dashboard (replace underscores)
             raw_name = category.replace('_', ' ')
             documents_qs = documents_qs.filter(source__iexact=raw_name)
-
+    
     if search:
         documents_qs = documents_qs.filter(
             Q(title__icontains=search) |
@@ -282,13 +286,20 @@ def documents_by_category(request, category):
     page_number = request.GET.get('page')
     documents = paginator.get_page(page_number)
 
+    # Déterminer l'affichage de la catégorie
+    if filter_name == 'CLIENT':
+        category_display = 'Client'
+    elif filter_name == 'NON_SPECIFIE':
+        category_display = 'Non spécifié'
+    else:
+        category_display = key_found if 'key_found' in locals() and key_found else category
+
     context = {
         'documents': documents,
         'category': category.upper(),
-        'category_display': 'Non spécifié' if filter_name == 'NON_SPECIFIE' else (key_found if key_found else category),
+        'category_display': category_display,
     }
     return render(request, 'client/library/documents_by_category.html', context)
-
 
 def document_list_horizontal(request):
     """Liste horizontale des documents avec noms et données principales"""
@@ -299,7 +310,7 @@ def document_list_horizontal(request):
     documents_qs = RawDocument.objects.filter(is_validated=True).select_related('owner')
     if search:
         documents_qs = documents_qs.filter(
-            Q(title__icontains=search) |
+            Q(title__icontains=search) | 
             Q(source__icontains=search) |
             Q(context__icontains=search)
         )
@@ -313,12 +324,9 @@ def document_list_horizontal(request):
     paginator = Paginator(documents_qs, 50)
     page_number = request.GET.get('page')
     documents = paginator.get_page(page_number)
-    document_types = RawDocument.objects.filter(is_validated=True).exclude(doc_type='').values_list('doc_type',
-                                                                                                    flat=True).distinct()
-    countries = RawDocument.objects.filter(is_validated=True).exclude(country='').values_list('country',
-                                                                                              flat=True).distinct()
-    languages = RawDocument.objects.filter(is_validated=True).exclude(language='').values_list('language',
-                                                                                               flat=True).distinct()
+    document_types = RawDocument.objects.filter(is_validated=True).exclude(doc_type='').values_list('doc_type', flat=True).distinct()
+    countries = RawDocument.objects.filter(is_validated=True).exclude(country='').values_list('country', flat=True).distinct()
+    languages = RawDocument.objects.filter(is_validated=True).exclude(language='').values_list('language', flat=True).distinct()
     context = {
         'documents': documents,
         'document_types': document_types,
@@ -333,7 +341,6 @@ def document_list_horizontal(request):
     }
     return render(request, 'client/library/document_list_horizontal.html', context)
 
-
 def documents_by_type(request, doc_type):
     """Documents filtrés par type avec affichage horizontal"""
     search = request.GET.get('search', '')
@@ -345,7 +352,7 @@ def documents_by_type(request, doc_type):
     ).select_related('owner')
     if search:
         documents_qs = documents_qs.filter(
-            Q(title__icontains=search) |
+            Q(title__icontains=search) | 
             Q(source__icontains=search) |
             Q(context__icontains=search)
         )
@@ -357,10 +364,8 @@ def documents_by_type(request, doc_type):
     paginator = Paginator(documents_qs, 50)
     page_number = request.GET.get('page')
     documents = paginator.get_page(page_number)
-    countries = RawDocument.objects.filter(is_validated=True).exclude(country='').values_list('country',
-                                                                                              flat=True).distinct()
-    languages = RawDocument.objects.filter(is_validated=True).exclude(language='').values_list('language',
-                                                                                               flat=True).distinct()
+    countries = RawDocument.objects.filter(is_validated=True).exclude(country='').values_list('country', flat=True).distinct()
+    languages = RawDocument.objects.filter(is_validated=True).exclude(language='').values_list('language', flat=True).distinct()
     context = {
         'documents': documents,
         'doc_type': doc_type,
@@ -374,7 +379,6 @@ def documents_by_type(request, doc_type):
     }
     return render(request, 'client/library/documents_by_type.html', context)
 
-
 def documents_by_country(request, country):
     """Documents filtrés par pays avec affichage horizontal"""
     search = request.GET.get('search', '')
@@ -386,7 +390,7 @@ def documents_by_country(request, country):
     ).select_related('owner')
     if search:
         documents_qs = documents_qs.filter(
-            Q(title__icontains=search) |
+            Q(title__icontains=search) | 
             Q(source__icontains=search) |
             Q(context__icontains=search)
         )
@@ -398,10 +402,8 @@ def documents_by_country(request, country):
     paginator = Paginator(documents_qs, 50)
     page_number = request.GET.get('page')
     documents = paginator.get_page(page_number)
-    document_types = RawDocument.objects.filter(is_validated=True).exclude(doc_type='').values_list('doc_type',
-                                                                                                    flat=True).distinct()
-    languages = RawDocument.objects.filter(is_validated=True).exclude(language='').values_list('language',
-                                                                                               flat=True).distinct()
+    document_types = RawDocument.objects.filter(is_validated=True).exclude(doc_type='').values_list('doc_type', flat=True).distinct()
+    languages = RawDocument.objects.filter(is_validated=True).exclude(language='').values_list('language', flat=True).distinct()
     context = {
         'documents': documents,
         'country': country,
@@ -415,13 +417,12 @@ def documents_by_country(request, country):
     }
     return render(request, 'client/library/documents_by_country.html', context)
 
-
 def document_detail(request, pk):
     """Détail d'un RawDocument avec ses métadonnées extraites par les métadonneurs"""
     document = get_object_or_404(RawDocument, pk=pk, is_validated=True)
     metadata = {
         'title': document.title or 'Non spécifié',
-        'doc_type': document.doc_type or 'Non spécifié',
+        'doc_type': document.doc_type or 'Non spécifié', 
         'publication_date': document.publication_date or 'Non spécifiée',
         'version': document.version or 'Non spécifiée',
         'source': document.source or 'Non spécifiée',
@@ -450,7 +451,6 @@ def document_detail(request, pk):
     }
     return render(request, 'client/library/document_detail.html', context)
 
-
 def download_document(request, pk):
     """Télécharger un RawDocument"""
     document = get_object_or_404(RawDocument, pk=pk, is_validated=True)
@@ -461,7 +461,6 @@ def download_document(request, pk):
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
 
-
 @api_view(['GET'])
 def search_documents(request):
     """API de recherche de documents"""
@@ -470,7 +469,7 @@ def search_documents(request):
     if not query:
         return Response([])
     documents = Document.objects.filter(
-        Q(title__icontains=query) |
+        Q(title__icontains=query) | 
         Q(description__icontains=query) |
         Q(tags__icontains=query),
         validation_status='validated'
@@ -486,7 +485,6 @@ def search_documents(request):
             'url': doc.get_absolute_url()
         })
     return Response(results)
-
 
 @api_view(['GET'])
 def document_metadata(request, pk):
@@ -523,7 +521,6 @@ def document_metadata(request, pk):
         'updated_at': document.updated_at.isoformat(),
     }
     return Response(metadata)
-
 
 def upload_document(request):
     """Interface d'upload de document avec traitement du formulaire"""
@@ -592,14 +589,14 @@ def upload_document(request):
 
             logger.info(f"Document '{title}' uploaded successfully with ID {document.id}")
             messages.success(request, f"Document '{title}' a été uploadé avec succès!")
-
+            
             return redirect('library:document_detail', pk=document.id)
 
         except Exception as e:
             logger.error(f"Error uploading document: {e}")
             messages.error(request, f"Erreur lors de l'upload du document: {str(e)}")
             return redirect('library:upload_document')
-
+    
     authorities = RegulatoryAuthority.objects.all().order_by('name')
     categories = DocumentCategory.objects.all().order_by('name')
     context = {
