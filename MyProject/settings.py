@@ -33,7 +33,7 @@ ALLOWED_HOSTS = [
 CSRF_TRUSTED_ORIGINS = [
     'https://myprojectiablcoklabs.onrender.com',
     'https://iablocklabs-zh6i.onrender.com',
-    'https://.replit.dev',
+    'https://*.replit.dev'
 ]
 
 
