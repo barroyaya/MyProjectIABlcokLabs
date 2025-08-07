@@ -18,14 +18,14 @@
       --primary-darker: #0369a1;
       --primary-light: #38bdf8;
       --primary-lighter: #7dd3fc;
-
+      
       --secondary: #059669;
       --secondary-dark: #047857;
       --secondary-light: #10b981;
-
+      
       --accent: #8b5cf6;
       --accent-light: #a78bfa;
-
+      
       --neutral-50: #f8fafc;
       --neutral-100: #f1f5f9;
       --neutral-200: #e2e8f0;
@@ -36,26 +36,26 @@
       --neutral-700: #334155;
       --neutral-800: #1e293b;
       --neutral-900: #0f172a;
-
+      
       --bg-primary: #ffffff;
       --bg-secondary: var(--neutral-50);
       --bg-card: rgba(255, 255, 255, 0.95);
       --bg-overlay: rgba(255, 255, 255, 0.1);
-
+      
       --text-primary: var(--neutral-900);
       --text-secondary: var(--neutral-600);
       --text-tertiary: var(--neutral-400);
-
+      
       --border: var(--neutral-200);
       --border-light: var(--neutral-100);
-
+      
       --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
       --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
       --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
       --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
       --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
       --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
-
+      
       --blur-sm: 4px;
       --blur-md: 8px;
       --blur-lg: 16px;
@@ -95,7 +95,7 @@
       position: absolute;
       width: 100%;
       height: 100%;
-      background:
+      background: 
         radial-gradient(circle at 20% 20%, rgba(14, 165, 233, 0.15) 0%, transparent 50%),
         radial-gradient(circle at 80% 40%, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
         radial-gradient(circle at 40% 80%, rgba(5, 150, 105, 0.1) 0%, transparent 50%),
@@ -849,7 +849,7 @@
         <span class="title-highlight">Pharmaceutique</span>
       </h1>
       <p class="hero-text">
-        Automatisez l'extraction, la validation et l'analyse de vos données pharmaceutiques
+        Automatisez l'extraction, la validation et l'analyse de vos données pharmaceutiques 
         avec notre solution IA de nouvelle génération. Conformité réglementaire garantie.
       </p>
       <div class="hero-features">
@@ -899,7 +899,7 @@
             <span>PharmaLabs</span>
           </div>
           <p class="brand-tagline">
-            Solution complète d'analyse et de validation pharmaceutique
+            Solution complète d'analyse et de validation pharmaceutique 
             conforme aux standards internationaux.
           </p>
           <div class="social-links">
@@ -959,11 +959,11 @@
     document.addEventListener('DOMContentLoaded', function() {
       // Animation des éléments flottants
       const floatingElements = document.querySelectorAll('.floating-pill');
-
+      
       floatingElements.forEach((element, index) => {
         const randomDelay = Math.random() * 5;
         const randomDuration = 15 + Math.random() * 10;
-
+        
         element.style.animationDelay = `${randomDelay}s`;
         element.style.animationDuration = `${randomDuration}s`;
       });
@@ -973,7 +973,7 @@
         const scrolled = window.pageYOffset;
         const parallax = document.querySelector('.gradient-mesh');
         const speed = scrolled * 0.5;
-
+        
         if (parallax) {
           parallax.style.transform = `translateY(${speed}px)`;
         }
@@ -1011,7 +1011,7 @@
         element.addEventListener('focus', function() {
           this.classList.add('focus-visible');
         });
-
+        
         element.addEventListener('blur', function() {
           this.classList.remove('focus-visible');
         });
@@ -1037,11 +1037,11 @@
       // Initialisation des micro-interactions pour les features (PAS la carte d'auth)
       document.querySelectorAll('.feature-item').forEach((item, index) => {
         item.style.animationDelay = `${index * 0.1}s`;
-
+        
         item.addEventListener('mouseenter', function() {
           this.style.transform = 'translateX(8px) scale(1.02)';
         });
-
+        
         item.addEventListener('mouseleave', function() {
           this.style.transform = 'translateX(0) scale(1)';
         });
@@ -1049,11 +1049,11 @@
 
       // Gestion intelligente du focus
       let isUsingMouse = false;
-
+      
       document.addEventListener('mousedown', () => {
         isUsingMouse = true;
       });
-
+      
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Tab') {
           isUsingMouse = false;
@@ -1072,20 +1072,20 @@
     function smoothTransition(element, property, target, duration = 300) {
       const start = parseFloat(getComputedStyle(element)[property]);
       const startTime = performance.now();
-
+      
       function animate(currentTime) {
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / duration, 1);
         const eased = 1 - Math.pow(1 - progress, 3); // Ease-out cubic
-
+        
         const current = start + (target - start) * eased;
         element.style[property] = current + (property.includes('opacity') ? '' : 'px');
-
+        
         if (progress < 1) {
           requestAnimationFrame(animate);
         }
       }
-
+      
       requestAnimationFrame(animate);
     }
 
@@ -1117,7 +1117,7 @@
         });
       }
     };
-
+    
     mediaQuery.addEventListener('change', handleResponsive);
     handleResponsive(mediaQuery);
   </script>
