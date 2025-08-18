@@ -308,7 +308,7 @@ body {
     box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
 }
 
-/* Pages List */
+/* Page Navigation - Style de l'annotateur avec améliorations */
 .pages-list {
     background: var(--pharma-bg-card);
     border-radius: var(--pharma-radius);
@@ -318,40 +318,65 @@ body {
     padding: 2rem;
 }
 
-.pages-grid {
+.page-nav-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.75rem;
     margin-top: 1rem;
 }
 
-.page-card {
-    background: linear-gradient(135deg, var(--pharma-glass), rgba(255,255,255,0.5));
-    border: 1px solid var(--pharma-border);
-    border-radius: var(--pharma-radius-sm);
-    padding: 1rem;
+.page-btn {
+    padding: 0.75rem;
     text-align: center;
+    font-size: 0.95rem;
+    border-radius: var(--pharma-radius-sm);
+    background: var(--pharma-bg-card);
+    border: 1px solid var(--pharma-border);
     transition: var(--pharma-transition);
+    text-decoration: none;
+    color: var(--pharma-text);
     cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
 }
 
-.page-card:hover {
-    background: linear-gradient(135deg, var(--pharma-primary), var(--pharma-accent));
+.page-btn:hover {
+    background: var(--pharma-primary);
     color: white;
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
+    box-shadow: var(--pharma-shadow);
+    text-decoration: none;
 }
 
-.page-card h4 {
-    margin: 0 0 0.5rem 0;
-    font-size: 1.1rem;
+/* Pages annotées en bleu pour différencier */
+.page-btn.has-annotations {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.3);
+    color: var(--pharma-primary);
     font-weight: 600;
 }
 
-.page-card p {
-    margin: 0;
-    font-size: 0.9rem;
+.page-btn.has-annotations:hover {
+    background: var(--pharma-primary);
+    color: white;
+    border-color: var(--pharma-primary);
+}
+
+.page-btn .page-number {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.page-btn .annotation-count {
+    font-size: 0.8rem;
     opacity: 0.8;
+}
+
+.page-btn.has-annotations .annotation-count {
+    font-weight: 600;
+    opacity: 1;
 }
 
 /* Monaco Editor Styles */
@@ -376,8 +401,8 @@ body {
         grid-template-columns: 1fr 1fr;
     }
     
-    .pages-grid {
-        grid-template-columns: 1fr;
+    .page-nav-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     }
 }
 
@@ -388,6 +413,10 @@ body {
 
     .json-container, .summary-container {
         padding: 1.5rem;
+    }
+
+    .page-nav-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
     }
 }
 
@@ -540,25 +569,33 @@ body {
   {% endif %}
 </section>
 
-<!-- Liste des pages annotées -->
-<section class="pages-list">
-  <h3><i class="fas fa-list"></i> Pages Annotées du Document</h3>
-  {% if document.pages.all %}
-  <div class="pages-grid">
+<!-- Navigation par pages - Style de l'annotateur -->
+{% if document.pages.all %}
+<section class="json-container">
+  <h3><i class="fas fa-book-open"></i> Navigation par Pages</h3>
+  <div class="page-nav-grid">
     {% for page in document.pages.all %}
-    <div class="page-card" onclick="goToPageJson({{ page.id }})">
-      <h4>Page {{ page.page_number }}</h4>
-      <p>{{ page.annotations.count }} annotation(s)</p>
-    </div>
+    <a href="{% url 'expert:view_page_annotation_json' page.id %}"
+       class="page-btn {% if page.annotations.count > 0 %}has-annotations{% endif %}">
+      <span class="page-number">Page {{ page.page_number }}</span>
+      {% if page.annotations.count > 0 %}
+        <span class="annotation-count">({{ page.annotations.count }} annotation{{ page.annotations.count|pluralize }})</span>
+      {% else %}
+        <span class="annotation-count">(Aucune annotation)</span>
+      {% endif %}
+    </a>
     {% endfor %}
   </div>
-  {% else %}
+</section>
+{% else %}
+<section class="json-container">
+  <h3><i class="fas fa-book-open"></i> Navigation par Pages</h3>
   <div class="alert alert-warning">
     <i class="fas fa-exclamation-triangle"></i>
     Aucune page trouvée pour ce document.
   </div>
-  {% endif %}
 </section>
+{% endif %}
 
 <!-- Actions rapides -->
 <section class="json-container">
@@ -750,11 +787,6 @@ function regenerateSummary(event) {
         return;
     }
     generateSummary(event);
-}
-
-// Aller au JSON d'une page
-function goToPageJson(pageId) {
-    window.location.href = `{% url 'expert:view_page_annotation_json' 0 %}`.replace('0', pageId);
 }
 
 // Exporter vers Excel (placeholder)
