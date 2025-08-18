@@ -621,11 +621,86 @@ body {
   border: 1px solid var(--pharma-border);
   border-radius: var(--pharma-radius);
   box-shadow: var(--pharma-shadow);
-  padding: 1.1rem 1.9rem;
+  padding: 1.5rem 2rem;
   margin-bottom: 2.1rem;
+}
+
+/* Actions Container */
+.actions-container {
+  margin-top: 1.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--pharma-border);
+}
+
+.action-group {
+  background: var(--pharma-glass);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  border-radius: var(--pharma-radius-sm);
+  padding: 1.2rem;
+  transition: var(--pharma-transition);
+}
+
+.action-group:hover {
+  border-color: rgba(59, 130, 246, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08);
+}
+
+.group-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--pharma-primary-dark);
+  margin-bottom: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 0.5rem;
+}
+
+.group-title::before {
+  content: '';
+  width: 3px;
+  height: 16px;
+  background: linear-gradient(to bottom, var(--pharma-primary), var(--pharma-accent));
+  border-radius: 2px;
+}
+
+.buttons-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  align-items: center;
+}
+
+/* Ajustements des boutons pour la nouvelle disposition */
+.buttons-row .btn-groq,
+.buttons-row .btn-validate,
+.buttons-row .btn-json-page,
+.buttons-row .btn-json-document,
+.buttons-row .btn-view-json,
+.buttons-row .btn-expert {
+  font-size: 0.9rem;
+  padding: 0.6rem 1.2rem;
+  flex: 1;
+  min-width: 140px;
+  justify-content: center;
+}
+
+/* Loading indicators container */
+.loading-indicators {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: rgba(59, 130, 246, 0.05);
+  border-radius: var(--pharma-radius-sm);
+  border: 1px dashed rgba(59, 130, 246, 0.2);
 }
 
 .page-controls { display: flex; align-items: center; gap: 1.5rem; }
@@ -655,11 +730,48 @@ body {
   transition: var(--pharma-transition);
   box-shadow: 0 3px 10px rgba(14,165,233,0.11);
   outline: none;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
+
 .nav-btn:hover {
   background: var(--pharma-primary);
   color: #fff;
   transform: scale(1.04) translateY(-1px);
+  text-decoration: none;
+}
+
+.nav-btn-icon {
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 1.2rem;
+  background: linear-gradient(135deg, var(--pharma-primary-dark), var(--pharma-primary));
+  box-shadow: 0 4px 15px rgba(14,165,233,0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+.nav-btn-icon:hover {
+  background: linear-gradient(135deg, var(--pharma-primary), var(--pharma-accent));
+  transform: scale(1.1) translateY(-2px);
+  box-shadow: 0 6px 20px rgba(14,165,233,0.25);
+}
+
+.nav-btn-icon:active {
+  transform: scale(0.95) translateY(0);
+}
+
+.nav-btn-icon i {
+  font-size: 1.3rem;
+  transition: var(--pharma-transition);
+}
+
+.nav-btn-icon:hover i {
+  transform: scale(1.1);
 }
 
 /* AI, Validate, Expert Buttons */
@@ -738,24 +850,73 @@ body {
   color: #fff;
 }
 
-.btn-view-json {
-  background: var(--pharma-glass);
-  border: 1.5px solid var(--pharma-info);
-  color: var(--pharma-info);
-  border-radius: 12px;
-  padding: 0.65rem 1.2rem;
-  font-weight: 600;
-  font-size: 1rem;
-  text-decoration: none;
-  transition: var(--pharma-transition);
-  display: inline-block;
+/* Groupement des actions JSON par paires */
+.json-action-pair {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
 }
 
-.btn-view-json:hover {
-  background: var(--pharma-info);
-  color: #fff;
-  border-color: var(--pharma-primary);
+/* Boutons JSON icônes stylisés */
+.btn-view-json-page,
+.btn-view-json-global {
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-decoration: none;
+  font-size: 1.2rem;
+  transition: var(--pharma-transition);
+  box-shadow: 0 3px 12px rgba(0,0,0,0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-view-json-page {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  border: 2px solid #059669;
+}
+
+.btn-view-json-page:hover {
+  background: linear-gradient(135deg, #059669, #047857);
+  color: #fff;
+  transform: scale(1.1) translateY(-2px);
+  box-shadow: 0 6px 20px rgba(16,185,129,0.25);
+  text-decoration: none;
+}
+
+.btn-view-json-global {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #fff;
+  border: 2px solid #d97706;
+}
+
+.btn-view-json-global:hover {
+  background: linear-gradient(135deg, #d97706, #b45309);
+  color: #fff;
+  transform: scale(1.1) translateY(-2px);
+  box-shadow: 0 6px 20px rgba(245,158,11,0.25);
+  text-decoration: none;
+}
+
+.btn-view-json-page:active,
+.btn-view-json-global:active {
+  transform: scale(0.95) translateY(0);
+}
+
+.btn-view-json-page i,
+.btn-view-json-global i {
+  font-size: 1.3rem;
+  transition: var(--pharma-transition);
+}
+
+.btn-view-json-page:hover i,
+.btn-view-json-global:hover i {
+  transform: scale(1.1);
 }
 
 .btn-expert {
@@ -1054,35 +1215,75 @@ body {
 }
 .btn-primary:hover { background: var(--pharma-primary); color: #fff; }
 
-/* Responsive pour les nouveaux boutons JSON */
+/* Responsive pour la nouvelle disposition */
 @media (max-width: 900px) {
   .main-content { max-width: 99vw; }
   .annotation-header, .text-content-card, .annotations-list, .learning-dashboard-widget, .annotation-types-panel, .page-navigation, .regulatory-analysis-panel {
     padding: 1.1rem 0.8rem !important;
   }
 
-  .ai-controls {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    gap: 0.8rem !important;
+  .actions-container {
+    grid-template-columns: 1fr;
+    gap: 1rem;
   }
 
-  .btn-json-page, .btn-json-document, .btn-view-json {
+  .buttons-row {
+    flex-direction: column;
+  }
+
+  .buttons-row .btn-groq,
+  .buttons-row .btn-validate,
+  .buttons-row .btn-expert {
     font-size: 0.9rem !important;
-    padding: 0.5rem 1rem !important;
+    padding: 0.7rem 1rem !important;
+    min-width: 100%;
+  }
+
+  .json-action-pair {
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+
+  .json-action-pair .btn-json-page,
+  .json-action-pair .btn-json-document {
+    font-size: 0.9rem !important;
+    padding: 0.7rem 1rem !important;
+    min-width: 100%;
+  }
+
+  .btn-view-json-page,
+  .btn-view-json-global {
+    width: 40px;
+    height: 40px;
+    font-size: 1rem;
   }
 }
 
 @media (max-width: 700px) {
-  .annotation-header, .annotation-types-panel, .page-navigation, .text-content-card, .annotations-list, .learning-dashboard-widget, .regulatory-analysis-panel {
+  .annotation-header, .annotation-types-panel, .text-content-card, .annotations-list, .learning-dashboard-widget, .regulatory-analysis-panel {
     flex-direction: column !important;
     gap: 1rem !important;
   }
+
+  .page-navigation {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .page-controls {
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+
   .header-actions { width: 100%; }
   .regulatory-stats { flex-direction: column; }
 
-  .ai-controls {
-    grid-template-columns: 1fr !important;
+  .action-group {
+    padding: 1rem;
+  }
+
+  .group-title {
+    font-size: 0.85rem;
   }
 }
 
@@ -1229,12 +1430,13 @@ body {
 </div>
 </section>
 
-<!-- Page Navigation avec les boutons JSON -->
+<!-- Page Navigation avec disposition améliorée des boutons -->
 <section class="page-navigation">
+  <!-- Navigation des pages -->
   <div class="page-controls">
     {% if current_page.page_number > 1 %}
-      <a href="?page={{ current_page.page_number|add:'-1' }}" class="nav-btn">
-        <i class="fas fa-chevron-left"></i>Précédente
+      <a href="?page={{ current_page.page_number|add:'-1' }}" class="nav-btn nav-btn-icon" title="Page précédente">
+        <i class="fas fa-angle-left"></i>
       </a>
     {% endif %}
 
@@ -1252,78 +1454,89 @@ body {
     </div>
 
     {% if current_page.page_number < total_pages %}
-      <a href="?page={{ current_page.page_number|add:'1' }}" class="nav-btn">
-        Suivante <i class="fas fa-chevron-right"></i>
+      <a href="?page={{ current_page.page_number|add:'1' }}" class="nav-btn nav-btn-icon" title="Page suivante">
+        <i class="fas fa-angle-right"></i>
       </a>
     {% endif %}
   </div>
 
-  <div class="ai-controls">
-    <!-- Enhanced AI Button (existant) -->
-    <button id="groq-annotate-btn" class="btn-groq" onclick="annotateWithGroq()">
-      <i class="fas fa-rocket"></i> Annotate with AI 🧠
-    </button>
+  <!-- Actions organisées par catégories -->
+  <div class="actions-container">
+    <!-- Groupe 1: Actions IA et Validation -->
+    <div class="action-group">
+      <h4 class="group-title">IA & Validation</h4>
+      <div class="buttons-row">
+        <button id="groq-annotate-btn" class="btn-groq" onclick="annotateWithGroq()">
+          <i class="fas fa-rocket"></i> Annotate with AI
+        </button>
 
-    <!-- Validate Page Button (existant) -->
-    <button id="validate-page-btn" class="btn-validate" onclick="validatePage()"
-            {% if current_page.is_validated_by_human %}disabled{% endif %}>
-      <i class="fas fa-graduation-cap"></i>
-      {% if current_page.is_validated_by_human %}
-        Page Validée 🎓
-      {% else %}
-        Validate Page
-      {% endif %}
-    </button>
-
-    <!-- NOUVEAUX BOUTONS JSON ET RÉSUMÉS -->
-
-    <!-- Bouton JSON de la page -->
-    <button id="generate-page-json-btn" class="btn-json-page" onclick="generatePageJson()">
-      <i class="fas fa-code"></i> JSON Page
-    </button>
-
-    <!-- Bouton pour voir le JSON de la page -->
-    <a href="{% url 'rawdocs:view_page_annotation_json' current_page.id %}"
-       class="btn-view-json" target="_blank">
-      <i class="fas fa-eye"></i> Voir JSON Page
-    </a>
-
-    <!-- Bouton JSON global du document -->
-    <button id="generate-document-json-btn" class="btn-json-document" onclick="generateDocumentJson()">
-      <i class="fas fa-file-contract"></i> JSON Global
-    </button>
-
-    <!-- Bouton pour voir le JSON global -->
-    <a href="{% url 'rawdocs:view_document_annotation_json' document.id %}"
-       class="btn-view-json" target="_blank">
-      <i class="fas fa-eye"></i> Voir JSON Global
-    </a>
-
-    <!-- Expert Review Button (existant) -->
-    {% if not document.is_ready_for_expert %}
-      <button id="submit-document-expert-btn" class="btn-expert" onclick="submitDocumentForExpert()">
-        <i class="fas fa-user-graduate"></i>
-        Soumission a l'Expert
-      </button>
-    {% else %}
-      <button class="btn btn-success" disabled>
-        <i class="fas fa-check-circle"></i>
-        Document Soumis ✓
-      </button>
-    {% endif %}
-
-    <!-- Loading indicators -->
-    <div id="ai-loading" class="ai-loading" style="display: none;">
-      <i class="fas fa-spinner fa-spin"></i> IA en cours...
+        <button id="validate-page-btn" class="btn-validate" onclick="validatePage()"
+                {% if current_page.is_validated_by_human %}disabled{% endif %}>
+          <i class="fas fa-graduation-cap"></i>
+          {% if current_page.is_validated_by_human %}Page Validée{% else %}Validate Page{% endif %}
+        </button>
+      </div>
     </div>
 
-    <div id="learning-progress" class="learning-progress" style="display: none;">
-      <i class="fas fa-brain"></i> IA en apprentissage...
+    <!-- Groupe 2: Actions JSON -->
+    <div class="action-group">
+      <h4 class="group-title">Export JSON</h4>
+      <div class="buttons-row">
+        <div class="json-action-pair">
+          <button id="generate-page-json-btn" class="btn-json-page" onclick="generatePageJson()">
+            <i class="fas fa-code"></i> Générer JSON Page
+          </button>
+
+          <a href="{% url 'rawdocs:view_page_annotation_json' current_page.id %}"
+             class="btn-view-json-page" target="_blank" title="Voir le JSON de cette page">
+            <i class="fas fa-file-code"></i>
+          </a>
+        </div>
+
+        <div class="json-action-pair">
+          <button id="generate-document-json-btn" class="btn-json-document" onclick="generateDocumentJson()">
+            <i class="fas fa-file-contract"></i> Générer JSON Global
+          </button>
+
+          <a href="{% url 'rawdocs:view_document_annotation_json' document.id %}"
+             class="btn-view-json-global" target="_blank" title="Voir le JSON du document complet">
+            <i class="fas fa-book-open"></i>
+          </a>
+        </div>
+      </div>
     </div>
 
-    <!-- Nouveau loading pour JSON -->
-    <div id="json-loading" class="json-loading" style="display: none;">
-      <i class="fas fa-spinner fa-spin"></i> Génération JSON...
+    <!-- Groupe 3: Révision Expert -->
+    <div class="action-group">
+      <h4 class="group-title">Révision Expert</h4>
+      <div class="buttons-row">
+        {% if not document.is_ready_for_expert %}
+          <button id="submit-document-expert-btn" class="btn-expert" onclick="submitDocumentForExpert()">
+            <i class="fas fa-user-graduate"></i>
+            Soumission à l'Expert
+          </button>
+        {% else %}
+          <button class="btn btn-success" disabled>
+            <i class="fas fa-check-circle"></i>
+            Document Soumis ✓
+          </button>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Indicateurs de chargement -->
+    <div class="loading-indicators">
+      <div id="ai-loading" class="ai-loading" style="display: none;">
+        <i class="fas fa-spinner fa-spin"></i> IA en cours...
+      </div>
+
+      <div id="learning-progress" class="learning-progress" style="display: none;">
+        <i class="fas fa-brain"></i> IA en apprentissage...
+      </div>
+
+      <div id="json-loading" class="json-loading" style="display: none;">
+        <i class="fas fa-spinner fa-spin"></i> Génération JSON...
+      </div>
     </div>
   </div>
 </section>
