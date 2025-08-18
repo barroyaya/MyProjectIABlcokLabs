@@ -1315,11 +1315,11 @@ body {
   </div>
 
     <div class="header-actions">
-      <button class="btn-outline me-2" onclick="viewOriginalDocument({{ document.id }})">
-        <i class="fas fa-eye"></i> See Original Doc
+      <button class="nav-btn nav-btn-icon me-2" onclick="viewOriginalDocument({{ document.id }})" title="Voir le document original">
+        <i class="fas fa-eye"></i>
       </button>
-      <a href="{% url 'rawdocs:annotation_dashboard' %}" class="btn-outline">
-        <i class="fas fa-arrow-left"></i> Retour
+      <a href="{% url 'rawdocs:annotation_dashboard' %}" class="nav-btn nav-btn-icon" title="Retour au dashboard">
+        <i class="fas fa-arrow-left"></i>
       </a>
     </div>
 </section>
@@ -1390,6 +1390,40 @@ body {
   </div>
   {% endif %}
 </section>
+
+<!-- SÉPARATEUR VISUEL CLAIR -->
+<div style="
+  margin: 3rem 0;
+  height: 60px;
+  background: linear-gradient(135deg, rgba(14,165,233,0.1) 0%, rgba(16,185,129,0.1) 50%, rgba(14,165,233,0.1) 100%);
+  border-radius: 16px;
+  border: 2px solid rgba(14,165,233,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+">
+  <div style="
+    background: white;
+    padding: 8px 20px;
+    border-radius: 25px;
+    border: 1px solid rgba(14,165,233,0.3);
+    box-shadow: 0 4px 12px rgba(14,165,233,0.1);
+    font-weight: 600;
+    color: var(--pharma-primary-dark);
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  ">
+    <span>⚖️</span>
+    <span>Analyse Réglementaire</span>
+    <span style="margin: 0 8px;">→</span>
+    <span>📝</span>
+    <span>Annotation</span>
+  </div>
+</div>
 
 <!-- Annotation Types Panel (identique) -->
 <section class="annotation-types-panel">
@@ -1654,8 +1688,8 @@ body {
 </section>
 {% endif %}
 
-<!-- Main Text Content (identique) -->
-<section class="text-content-card main-content">
+<!-- Main Text Content avec espacement -->
+<section class="text-content-card main-content" style="margin-top: 3rem;">
   <h3>
     <i class="fas fa-file-text"></i>
     Page {{ current_page.page_number }}
