@@ -427,7 +427,7 @@ body {
   </div>
 
   <div class="header-actions">
-    <a href="{% url 'expert:annotate_document' document.id %}?page={{ page.page_number }}" class="btn-action">
+    <a href="{% url 'expert:review_document' document.id %}" class="btn-action">
       <i class="fas fa-arrow-left"></i> Retour à l'annotation
     </a>
   </div>
@@ -509,7 +509,7 @@ body {
 <section class="json-container">
   <h3><i class="fas fa-bolt"></i> Actions Rapides Expert</h3>
   <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
-    <a href="{% url 'expert:annotate_document' document.id %}?page={{ page.page_number }}" class="btn-action">
+    <a href="{% url 'expert:review_document' document.id %}" class="btn-action">
       <i class="fas fa-highlighter"></i> Continuer l'annotation
     </a>
     <a href="{% url 'expert:view_document_annotation_json' document.id %}" class="btn-action">
