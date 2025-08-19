@@ -1,4 +1,5 @@
 # expert/views.py
+import os
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.generic import TemplateView
@@ -20,6 +21,19 @@ import re
 
 from .models import ExpertLog
 from rawdocs.models import RawDocument, DocumentPage, Annotation, AnnotationType
+
+from pymongo import MongoClient
+from django.conf import settings
+
+# Connexion MongoDB (ajuste ton URI si besoin)
+MONGO_URI = getattr(settings, "MONGO_URI", "mongodb://localhost:27017/")
+MONGO_DB = getattr(settings, "MONGO_DB", "annotations_db")
+MONGO_COLLECTION = getattr(settings, "MONGO_COLLECTION", "documents")
+
+mongo_client = MongoClient(MONGO_URI)
+mongo_db = mongo_client[MONGO_DB]
+mongo_collection = mongo_db[MONGO_COLLECTION]
+
 
 
 def is_expert(user):
@@ -841,6 +855,10 @@ def update_existing_product_with_variations(existing_product, new_sites_data, do
     return existing_product
 
 
+# expert/views.py - Modifier la fonction validate_document
+
+# expert/views.py - Corriger la fonction validate_document
+
 @expert_required
 def validate_document(request, document_id):
     """Validate entire document and create product if it's a manufacturer document"""
@@ -854,6 +872,71 @@ def validate_document(request, document_id):
             # Create or update product from annotations
             product = create_product_from_annotations(document)
 
+            # Fonction helper pour gérer les dates
+            def safe_isoformat(date_value):
+                if date_value is None:
+                    return None
+                if isinstance(date_value, str):
+                    return date_value
+                if hasattr(date_value, 'isoformat'):
+                    return date_value.isoformat()
+                return str(date_value)
+
+            # Sauvegarder dans MongoDB avec toutes les métadonnées lors de la validation
+            from rawdocs.models import CustomFieldValue
+
+            # Construire les métadonnées complètes
+            metadata = {
+                'title': document.title,
+                'doc_type': document.doc_type,
+                'publication_date': safe_isoformat(document.publication_date),
+                'version': document.version,
+                'source': document.source,
+                'context': document.context,
+                'country': document.country,
+                'language': document.language,
+                'url_source': document.url_source,
+                'url': document.url,
+                'created_at': safe_isoformat(document.created_at),
+                'validated_at': timezone.now().isoformat(),
+                'validated_by': request.user.username,
+                'owner': document.owner.username if document.owner else None,
+                'total_pages': document.total_pages,
+                'file_name': os.path.basename(document.file.name) if document.file else None,
+            }
+
+            # Ajouter les champs personnalisés
+            custom_fields = {}
+            for custom_value in CustomFieldValue.objects.filter(document=document):
+                custom_fields[custom_value.field.name] = custom_value.value
+
+            if custom_fields:
+                metadata['custom_fields'] = custom_fields
+
+            # Récupérer les entités du JSON global si elles existent
+            entities = {}
+            if hasattr(document, 'global_annotations_json') and document.global_annotations_json:
+                entities = document.global_annotations_json.get('entities', {})
+
+            # Sauvegarder dans MongoDB
+            mongo_collection.update_one(
+                {"document_id": str(document.id)},
+                {
+                    "$set": {
+                        "document_id": str(document.id),
+                        "title": document.title,
+                        "metadata": metadata,
+                        "entities": entities,
+                        "validated": True,
+                        "validated_at": timezone.now().isoformat(),
+                        "validated_by": request.user.username,
+                        "product_created": product.name if product else None,
+                        "updated_at": timezone.now().isoformat()
+                    }
+                },
+                upsert=True
+            )
+
             if product:
                 debug_product_annotations()
                 # Check if it was an update or new creation
@@ -861,7 +944,7 @@ def validate_document(request, document_id):
                     product=product,
                     submission_date=timezone.now().date()
                 ).count()
-                
+
                 if variations_today > 0:
                     messages.success(
                         request,
@@ -888,8 +971,6 @@ def validate_document(request, document_id):
             return redirect('expert:review_document', document_id=document_id)
 
     return redirect('expert:review_document', document_id=document_id)
-
-
 def debug_annotations_for_product(document):
     """Debug function to show what annotations are available"""
     validated_annotations = Annotation.objects.filter(
@@ -1021,10 +1102,14 @@ def save_page_json(request, page_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+# expert/views.py - Modifier uniquement la fonction save_document_json
+
+# expert/views.py - Corriger la fonction save_document_json
+
 @expert_required
 @csrf_exempt
 def save_document_json(request, doc_id):
-    """Sauvegarde du JSON global modifié d'un document"""
+    """Sauvegarde du JSON global modifié d'un document (et stockage MongoDB avec métadonnées complètes)"""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
 
@@ -1042,10 +1127,65 @@ def save_document_json(request, doc_id):
         except json.JSONDecodeError as e:
             return JsonResponse({'error': f'Invalid JSON format: {str(e)}'}, status=400)
 
-        # Sauvegarder le nouveau JSON
+        # Fonction helper pour gérer les dates
+        def safe_isoformat(date_value):
+            if date_value is None:
+                return None
+            if isinstance(date_value, str):
+                return date_value
+            if hasattr(date_value, 'isoformat'):
+                return date_value.isoformat()
+            return str(date_value)
+
+        # Enrichir le JSON avec TOUTES les métadonnées du document
+        parsed_json['document']['metadata'] = {
+            'title': document.title,
+            'doc_type': document.doc_type,
+            'publication_date': safe_isoformat(document.publication_date),
+            'version': document.version,
+            'source': document.source,
+            'context': document.context,
+            'country': document.country,
+            'language': document.language,
+            'url_source': document.url_source,
+            'url': document.url,
+            'created_at': safe_isoformat(document.created_at),
+            'validated_at': safe_isoformat(document.validated_at),
+            'owner': document.owner.username if document.owner else None,
+            'total_pages': document.total_pages,
+            'file_name': os.path.basename(document.file.name) if document.file else None,
+        }
+
+        # Ajouter les champs personnalisés s'ils existent
+        from rawdocs.models import CustomFieldValue
+        custom_fields = {}
+        for custom_value in CustomFieldValue.objects.filter(document=document):
+            custom_fields[custom_value.field.name] = custom_value.value
+
+        if custom_fields:
+            parsed_json['document']['metadata']['custom_fields'] = custom_fields
+
+        # Sauvegarder en base SQL
         document.global_annotations_json = parsed_json
         document.global_annotations_summary_generated_at = timezone.now()
         document.save(update_fields=['global_annotations_json', 'global_annotations_summary_generated_at'])
+
+        # Sauvegarder dans MongoDB avec toutes les métadonnées
+        mongo_collection.update_one(
+            {"document_id": str(document.id)},
+            {
+                "$set": {
+                    "document_id": str(document.id),
+                    "title": document.title,
+                    "metadata": parsed_json['document']['metadata'],  # Toutes les métadonnées
+                    "json": parsed_json,
+                    "entities": parsed_json.get('entities', {}),
+                    "updated_at": timezone.now().isoformat(),
+                    "updated_by": request.user.username
+                }
+            },
+            upsert=True
+        )
 
         # LOG ACTION
         log_expert_action(
@@ -1054,18 +1194,17 @@ def save_document_json(request, doc_id):
             annotation=None,
             document_id=document.id,
             document_title=document.title,
-            reason=f"Global JSON manually edited by expert"
+            reason=f"Global JSON manually edited by expert with full metadata"
         )
 
         return JsonResponse({
             'success': True,
-            'message': 'JSON sauvegardé avec succès'
+            'message': 'JSON sauvegardé avec succès (SQL + MongoDB avec métadonnées complètes)'
         })
 
     except Exception as e:
         print(f"❌ Erreur lors de la sauvegarde du JSON: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
-
 
 # ——— NOUVELLES VUES ANNOTATION EXPERT (copiées et adaptées de rawdocs) —————————————————————————————————
 
