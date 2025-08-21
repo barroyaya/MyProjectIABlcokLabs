@@ -23,6 +23,7 @@ from django.contrib.auth import views as auth_views
 from django.http import HttpResponse
 from django.views.decorators.http import require_POST
 
+
 from .models import (
     RawDocument, MetadataLog,
     DocumentPage, AnnotationType,
@@ -190,7 +191,7 @@ def upload_pdf(request):
             rd.save()
             metadata = extract_metadonnees(rd.file.path, rd.url or "")
             text = extract_full_text(rd.file.path)
-
+            
             # Sauvegarder les métadonnées extraites par le LLM dans les champs du modèle
             if metadata:
                 rd.title = metadata.get('title', '')
@@ -203,7 +204,7 @@ def upload_pdf(request):
                 rd.language = metadata.get('language', '')
                 rd.url_source = metadata.get('url_source', rd.url or '')
                 rd.save()
-
+                
                 print(f"✅ Métadonnées LLM sauvegardées pour le document {rd.pk}")
                 print(f"   - Titre: {rd.title}")
                 print(f"   - Type: {rd.doc_type}")
@@ -256,12 +257,11 @@ def edit_metadata(request, doc_id):
     metadata = extract_metadonnees(rd.file.path, rd.url or "")
 
     if request.method == 'POST':
-        form = MetadataEditForm(request.POST)
+        form = MetadataEditForm(request.POST)        
         if form.is_valid():
             # Handle standard fields (your existing code)
-            standard_fields = ['title', 'type', 'publication_date', 'version', 'source', 'context', 'country',
-                               'language', 'url_source']
-
+            standard_fields = ['title', 'type', 'publication_date', 'version', 'source', 'context', 'country', 'language', 'url_source']
+            
             for field_name in standard_fields:
                 if field_name in form.cleaned_data:
                     new_value = form.cleaned_data[field_name]
@@ -285,7 +285,7 @@ def edit_metadata(request, doc_id):
             rd.language = form.cleaned_data.get('language', rd.language) or ''
             rd.url_source = form.cleaned_data.get('url_source', rd.url_source) or (rd.url or '')
             rd.save()
-
+            
             from .models import CustomField, CustomFieldValue
             for key, value in request.POST.items():
                 if key.startswith('custom_'):
@@ -302,17 +302,17 @@ def edit_metadata(request, doc_id):
                             old_val = custom_value.value
                             custom_value.value = value
                             custom_value.save()
-
+                            
                             MetadataLog.objects.create(
-                                document=rd,
+                                document=rd, 
                                 field_name=f"Custom: {field_name}",
-                                old_value=old_val,
+                                old_value=old_val, 
                                 new_value=value,
                                 modified_by=request.user
                             )
                     except CustomField.DoesNotExist:
                         pass
-
+            
             messages.success(request, "Métadonnées mises à jour")
             return redirect('rawdocs:document_list')
     else:
@@ -330,7 +330,7 @@ def edit_metadata(request, doc_id):
         form = MetadataEditForm(initial=initial_data)
 
     logs = MetadataLog.objects.filter(document=rd).order_by('-modified_at')
-
+    
     # Load existing custom fields fo this document ONLY
     from .models import CustomField, CustomFieldValue
     custom_fields_data = []
@@ -340,7 +340,7 @@ def edit_metadata(request, doc_id):
             'type': custom_value.field.field_type,
             'value': custom_value.value
         })
-
+    
     return render(request, 'rawdocs/edit_metadata.html', {
         'form': form,
         'metadata': metadata,
@@ -348,7 +348,6 @@ def edit_metadata(request, doc_id):
         'logs': logs,
         'custom_fields_data': custom_fields_data  # ADD THIS LINE
     })
-
 
 @login_required(login_url='rawdocs:login')
 @user_passes_test(is_metadonneur)
@@ -867,13 +866,12 @@ def delete_annotation_type(request):
     except Exception as e:
         print(f"❌ Error deleting annotation type: {e}")
         return JsonResponse({'error': str(e)}, status=500)
-
-
+    
 @login_required
 def view_original_document(request, document_id):
     """View the original document PDF - RAWDOCS VERSION"""
     document = get_object_or_404(RawDocument, id=document_id)
-
+    
     # Case 1: Document has a local file
     if document.file:
         try:
@@ -888,7 +886,7 @@ def view_original_document(request, document_id):
                 f"<p>Le fichier PDF n'a pas pu être chargé: {str(e)}</p>"
                 f"<script>window.close();</script></body></html>"
             )
-
+    
     # Case 2: Document was uploaded via URL
     elif document.url:
         try:
@@ -901,7 +899,7 @@ def view_original_document(request, document_id):
                 f"<p><a href='{document.url}' target='_blank'>Essayer d'ouvrir directement: {document.url}</a></p>"
                 f"<script>window.close();</script></body></html>"
             )
-
+    
     # Case 3: No file and no URL
     else:
         return HttpResponse(
@@ -910,7 +908,6 @@ def view_original_document(request, document_id):
             "<script>window.close();</script></body></html>"
         )
 
-
 @login_required
 def document_tables_images(request, document_id):
     """
@@ -918,25 +915,25 @@ def document_tables_images(request, document_id):
     """
     try:
         document = RawDocument.objects.get(id=document_id)
-
+        
         # Vérifier les permissions
         if not request.user.is_staff and document.owner != request.user:
             messages.error(request, "Vous n'avez pas accès à ce document.")
             return redirect('rawdocs:document_list')
-
+        
         # Créer l'extracteur
         extractor = TableImageExtractor(document.file.path)
-
+        
         # Extraire tableaux et images
         tables = extractor.extract_tables_with_structure()
         images = extractor.extract_images()
-
+        
         # Obtenir le HTML combiné
         combined_html = extractor.get_combined_html()
-
+        
         # Résumé de l'extraction
         summary = extractor.get_extraction_summary()
-
+        
         context = {
             'document': document,
             'tables': tables,
@@ -945,16 +942,15 @@ def document_tables_images(request, document_id):
             'summary': summary,
             'total_elements': len(tables) + len(images)
         }
-
+        
         return render(request, 'rawdocs/document_tables_images.html', context)
-
+        
     except RawDocument.DoesNotExist:
         messages.error(request, "Document non trouvé.")
         return redirect('rawdocs:document_list')
     except Exception as e:
         messages.error(request, f"Erreur lors de l'extraction: {str(e)}")
         return redirect('rawdocs:document_detail', document_id=document_id)
-
 
 @login_required
 def export_tables_excel(request, document_id):
@@ -963,29 +959,29 @@ def export_tables_excel(request, document_id):
     """
     try:
         document = RawDocument.objects.get(id=document_id)
-
+        
         # Vérifier les permissions
         if not request.user.is_staff and document.owner != request.user:
             return JsonResponse({'error': 'Accès non autorisé'}, status=403)
-
+        
         # Créer l'extracteur et extraire les tableaux
         extractor = TableImageExtractor(document.file.path)
         tables = extractor.extract_tables_with_structure()
-
+        
         if not tables:
             return JsonResponse({'error': 'Aucun tableau trouvé dans ce document'}, status=404)
-
+        
         # Créer le fichier Excel
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
         filename = f"tableaux_{document.title}_{document.id}.xlsx"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
-
+        
         # Utiliser un buffer pour créer le fichier Excel
         import io
         import pandas as pd
-
+        
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
             for table in tables:
@@ -993,20 +989,19 @@ def export_tables_excel(request, document_id):
                 # Limiter la longueur du nom de feuille
                 if len(sheet_name) > 31:
                     sheet_name = f"P{table['page']}_T{table['table_number']}"
-
+                
                 table['dataframe'].to_excel(writer, sheet_name=sheet_name, index=False)
-
+        
         buffer.seek(0)
         response.write(buffer.getvalue())
         buffer.close()
-
+        
         return response
-
+        
     except RawDocument.DoesNotExist:
         return JsonResponse({'error': 'Document non trouvé'}, status=404)
     except Exception as e:
         return JsonResponse({'error': f'Erreur lors de l\'export: {str(e)}'}, status=500)
-
 
 @login_required
 def document_detail(request, document_id):
@@ -1015,30 +1010,29 @@ def document_detail(request, document_id):
     """
     try:
         document = get_object_or_404(RawDocument, id=document_id)
-
+        
         # Vérifier les permissions
         if not request.user.is_staff and document.owner != request.user:
             messages.error(request, "Vous n'avez pas accès à ce document.")
             return redirect('rawdocs:document_list')
-
+        
         # Ajouter basename pour le template
         document.basename = os.path.basename(document.file.name) if document.file else "Document sans fichier"
-
+        
         context = {
             'doc': document,
             'document': document,
         }
-
+        
         return render(request, 'rawdocs/details_metadata.html', context)
-
+        
     except RawDocument.DoesNotExist:
         messages.error(request, "Document non trouvé.")
         return redirect('rawdocs:document_list')
     except Exception as e:
         messages.error(request, f"Erreur lors de l'affichage du document: {str(e)}")
         return redirect('rawdocs:document_list')
-
-
+    
 @login_required
 def add_field_ajax(request):
     if request.method == 'POST':
@@ -1047,50 +1041,49 @@ def add_field_ajax(request):
         name = data.get('name')
         field_type = data.get('type', 'text')
         doc_id = data.get('doc_id')  # Get document ID
-
+        
         from .models import CustomField, CustomFieldValue, RawDocument
-
+        
         # Get the document
         document = get_object_or_404(RawDocument, id=doc_id)
-
+        
         # Get or create the field type globally (for field type reference)
         field, created = CustomField.objects.get_or_create(
             name=name,
             defaults={'field_type': field_type}
         )
-
+        
         # Create the field value ONLY for this specific document
         custom_value, value_created = CustomFieldValue.objects.get_or_create(
             document=document,
             field=field,
             defaults={'value': ''}  # Empty value initially
         )
-
+        
         if value_created:
             return JsonResponse({
-                'success': True,
+                'success': True, 
                 'message': f'Field "{name}" added to this document only!'
             })
         else:
             return JsonResponse({
-                'success': False,
+                'success': False, 
                 'message': f'Field "{name}" already exists for this document!'
             })
-
+    
     return JsonResponse({'success': False})
 
-
-@login_required
+@login_required  
 def save_custom_field(request):
     if request.method == 'POST':
         doc_id = request.POST.get('doc_id')
         field_name = request.POST.get('field_name')
         value = request.POST.get('value', '')
-
+        
         from .models import RawDocument, CustomField, CustomFieldValue
         document = get_object_or_404(RawDocument, id=doc_id)
         field = get_object_or_404(CustomField, name=field_name)
-
+        
         custom_value, created = CustomFieldValue.objects.get_or_create(
             document=document,
             field=field,
@@ -1099,9 +1092,9 @@ def save_custom_field(request):
         if not created:
             custom_value.value = value
             custom_value.save()
-
+            
         return JsonResponse({'success': True})
-
+    
     return JsonResponse({'success': False})
 
 
@@ -1109,29 +1102,29 @@ def create_product_from_metadata(document):
     """Create product from custom metadata fields"""
     from .models import CustomFieldValue
     from client.products.models import Product
-
+    
     # Find Product/Produit field (case insensitive)
     custom_values = CustomFieldValue.objects.filter(document=document)
-
+    
     product_field = None
     product_name = None
-
+    
     for custom_value in custom_values:
         field_name = custom_value.field.name.lower()
         if field_name in ['product', 'produit']:
             product_name = custom_value.value.strip()
             break
-
+    
     if not product_name:
         return None
-
+    
     # Create product with metadata fields
     product_data = {'name': product_name}
-
+    
     # Auto-map matching fields
     field_mapping = {
         'dosage': 'dosage',
-        'dose': 'dosage',
+        'dose': 'dosage', 
         'active_ingredient': 'active_ingredient',
         'substance_active': 'active_ingredient',
         'form': 'form',
@@ -1139,12 +1132,12 @@ def create_product_from_metadata(document):
         'therapeutic_area': 'therapeutic_area',
         'zone_therapeutique': 'therapeutic_area'
     }
-
+    
     for custom_value in custom_values:
         field_name = custom_value.field.name.lower()
         if field_name in field_mapping and custom_value.value:
             product_data[field_mapping[field_name]] = custom_value.value
-
+    
     # Create the product
     product = Product.objects.create(
         name=product_data['name'],
@@ -1155,7 +1148,7 @@ def create_product_from_metadata(document):
         status='commercialise',
         source_document=document
     )
-
+    
     print(f"✅ Product '{product.name}' created from metadata!")
     return product
 
@@ -1500,7 +1493,6 @@ from .regulatory_analyzer import RegulatoryAnalyzer
 from collections import OrderedDict
 from datetime import datetime
 
-
 def _build_entities_map(annotations_qs, use_display_name=True):
     """
     Construit {entité -> [valeurs_uniques]} à partir d'un QuerySet d'annotations.
@@ -1525,7 +1517,6 @@ def _build_entities_map(annotations_qs, use_display_name=True):
             seen_per_key[key].add(val)
 
     return entities
-
 
 @login_required
 @csrf_exempt
@@ -1586,6 +1577,7 @@ def generate_page_annotation_summary(request, page_id):
     except Exception as e:
         print(f"❌ Erreur génération résumé page {page_id}: {e}")
         return JsonResponse({'error': f'Erreur lors de la génération: {str(e)}'}, status=500)
+
 
 
 @login_required
@@ -1663,7 +1655,6 @@ def generate_document_annotation_summary(request, doc_id):
         print(f"❌ Erreur génération résumé document {doc_id}: {e}")
         return JsonResponse({'error': f'Erreur lors de la génération: {str(e)}'}, status=500)
 
-
 def generate_entities_based_page_summary(entities, page_number, document_title):
     """
     Résumé NL d'une page à partir du dict {entité -> [valeurs]}.
@@ -1701,7 +1692,7 @@ Réponds UNIQUEMENT par le paragraphe.
 
         analyzer = RegulatoryAnalyzer()
         response = analyzer.call_groq_api(prompt, max_tokens=280)
-        return response.strip() if response else f"Page {page_number}: synthèse de {total_pairs} élément(s) annoté(s) sur les entités « {', '.join(list(entities.keys())[:5])}{'…' if len(entities) > 5 else ''} »."
+        return response.strip() if response else f"Page {page_number}: synthèse de {total_pairs} élément(s) annoté(s) sur les entités « {', '.join(list(entities.keys())[:5])}{'…' if len(entities)>5 else ''} »."
     except Exception as e:
         print(f"❌ Erreur génération résumé (page): {e}")
         # Fallback minimal
@@ -1754,7 +1745,6 @@ Réponds UNIQUEMENT par le paragraphe.
         print(f"❌ Erreur génération résumé (document): {e}")
         total_values = sum(len(v) for v in entities.values())
         return f"Document : {total_values} valeur(s) sur {len(entities)} entité(s)."
-
 
 @login_required
 def view_page_annotation_json(request, page_id):

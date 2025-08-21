@@ -989,7 +989,7 @@ body {
               {{ annotation.annotation_type.display_name }}
             </span>
             <span class="annotation-confidence">{{ annotation.confidence_score|floatformat:0 }}%</span>
-
+            
             <!-- Validation Status Badge -->
             {% if annotation.validation_status == 'validated' %}
               <span class="badge bg-success">✓ Validé</span>
@@ -1660,7 +1660,7 @@ function clearExistingHighlights() {
     if (window.highlightTimeout) {
         clearTimeout(window.highlightTimeout);
     }
-
+    
     const existingHighlight = document.getElementById('highlighted-annotation');
     if (existingHighlight) {
         const parent = existingHighlight.parentNode;

@@ -35,6 +35,7 @@ mongo_db = mongo_client[MONGO_DB]
 mongo_collection = mongo_db[MONGO_COLLECTION]
 
 
+
 def is_expert(user):
     """Check if user is in Expert group"""
     return user.groups.filter(name="Expert").exists()
@@ -120,7 +121,7 @@ class DocumentReviewView(LoginRequiredMixin, TemplateView):
 
         # Get all annotation types for expert interface
         annotation_types = AnnotationType.objects.all().order_by('display_name')
-
+        
         # Get existing annotations for current page
         existing_annotations = current_page.annotations.all() if current_page else []
 
@@ -335,10 +336,10 @@ def modify_annotation_ajax(request, annotation_id):
                 page = annotation.page
                 document = page.document
                 page_annotations = page.annotations.all().select_related('annotation_type').order_by('start_pos')
-
+                
                 from rawdocs.views import _build_entities_map, generate_entities_based_page_summary
                 page_entities = _build_entities_map(page_annotations, use_display_name=True)
-
+                
                 page_json = {
                     'document': {
                         'id': str(document.id),
@@ -353,17 +354,17 @@ def modify_annotation_ajax(request, annotation_id):
                     'entities': page_entities,
                     'generated_at': datetime.utcnow().isoformat() + 'Z',
                 }
-
+                
                 page.annotations_json = page_json
                 page.save(update_fields=['annotations_json'])
-
+                
                 # Mise à jour du JSON du document
                 all_annotations = Annotation.objects.filter(
                     page__document=document
                 ).select_related('annotation_type', 'page').order_by('page__page_number', 'start_pos')
-
+                
                 document_entities = _build_entities_map(all_annotations, use_display_name=True)
-
+                
                 document_json = {
                     'document': {
                         'id': str(document.id),
@@ -376,12 +377,12 @@ def modify_annotation_ajax(request, annotation_id):
                     'entities': document_entities,
                     'generated_at': datetime.utcnow().isoformat() + 'Z',
                 }
-
+                
                 document.global_annotations_json = document_json
                 document.save(update_fields=['global_annotations_json'])
-
+                
                 print(f"✅ JSON mis à jour après modification pour la page {page.page_number} et le document")
-
+                
             except Exception as e:
                 print(f"❌ Erreur lors de la mise à jour du JSON après modification: {str(e)}")
 
@@ -599,7 +600,7 @@ def delete_annotation_type_ajax(request):
 
             if annotations_count > 0:
                 return JsonResponse({
-                    'success': False,
+                    'success': False, 
                     'error': f'Cannot delete annotation type "{annotation_type.display_name}" as it is used by {annotations_count} annotation(s)'
                 })
 
@@ -645,7 +646,7 @@ def create_product_from_annotations(document):
 
     # Core product fields (these go into regular product fields)
     core_fields = ['product', 'dosage', 'substance_active', 'site', 'adresse', 'address', 'pays', 'country']
-
+    
     # Additional annotations (these go into JSON field)
     additional_annotations = {}
     for annotation_type, values in annotations_by_type.items():
@@ -655,7 +656,7 @@ def create_product_from_annotations(document):
 
     # Extract core product information
     product_name = annotations_by_type.get('product', [''])[0] or 'Unknown Product'
-
+    
     product_data = {
         'name': product_name,
         'dosage': annotations_by_type.get('dosage', [''])[0] or 'N/A',
@@ -688,10 +689,10 @@ def create_product_from_annotations(document):
 
     print(f"DEBUG: Processing product '{product_name}' with {len(sites_data)} sites")
     print(f"DEBUG: Additional annotations stored: {additional_annotations}")
-
+    
     # Check if product exists
     existing_product = Product.objects.filter(name=product_name).first()
-
+    
     if existing_product and product_name != 'Unknown Product':
         return update_existing_product_with_variations(existing_product, sites_data, document, additional_annotations)
     else:
@@ -701,10 +702,10 @@ def create_product_from_annotations(document):
 def debug_product_annotations():
     """Debug function to check if products have additional annotations"""
     from client.products.models import Product
-
+    
     print("🔍 DEBUGGING PRODUCT ADDITIONAL ANNOTATIONS")
     print("=" * 50)
-
+    
     for product in Product.objects.all():
         print(f"📦 Product: {product.name}")
         if hasattr(product, 'additional_annotations'):
@@ -727,7 +728,7 @@ def create_new_product(product_data, sites_data, document):
                 status=product_data['status'],
                 source_document=document
             )
-
+            
             # Try to save additional annotations after creation
             try:
                 if 'additional_annotations' in product_data:
@@ -764,25 +765,25 @@ def update_existing_product_with_variations(existing_product, new_sites_data, do
     existing_sites = list(ManufacturingSite.objects.filter(product=existing_product).values(
         'site_name', 'country', 'city'
     ))
-
+    
     print(f"DEBUG: Existing sites: {existing_sites}")
     print(f"DEBUG: New sites: {new_sites_data}")
-
+    
     # Compare sites
     added_sites = []
     removed_sites = []
-
+    
     # Find new sites
     for new_site in new_sites_data:
         site_exists = any(
-            existing_site['site_name'].strip().lower() == new_site['site_name'].strip().lower() and
+            existing_site['site_name'].strip().lower() == new_site['site_name'].strip().lower() and 
             existing_site['country'].strip().lower() == new_site['country'].strip().lower()
             for existing_site in existing_sites
         )
         if not site_exists:
             added_sites.append(new_site)
-
-    # Find removed sites
+    
+    # Find removed sites  
     for existing_site in existing_sites:
         site_still_exists = any(
             new_site['site_name'].strip().lower() == existing_site['site_name'].strip().lower() and
@@ -791,13 +792,13 @@ def update_existing_product_with_variations(existing_product, new_sites_data, do
         )
         if not site_still_exists:
             removed_sites.append(existing_site)
-
+    
     print(f"DEBUG: Sites to add: {added_sites}")
     print(f"DEBUG: Sites to remove: {removed_sites}")
-
+    
     # Create variations for changes
     variations_created = []
-
+    
     # Add variations for new sites
     for site in added_sites:
         variation = ProductVariation.objects.create(
@@ -809,7 +810,7 @@ def update_existing_product_with_variations(existing_product, new_sites_data, do
             status='soumis'
         )
         variations_created.append(variation)
-
+        
         # Actually add the site to the product
         ManufacturingSite.objects.create(
             product=existing_product,
@@ -819,7 +820,7 @@ def update_existing_product_with_variations(existing_product, new_sites_data, do
             gmp_certified=site.get('gmp_certified', False)
         )
         print(f"DEBUG: Added variation and site: {site['site_name']}")
-
+    
     # Add variations for removed sites
     for site in removed_sites:
         variation = ProductVariation.objects.create(
@@ -831,7 +832,7 @@ def update_existing_product_with_variations(existing_product, new_sites_data, do
             status='soumis'
         )
         variations_created.append(variation)
-
+        
         # Actually remove the site from the product
         ManufacturingSite.objects.filter(
             product=existing_product,
@@ -839,7 +840,7 @@ def update_existing_product_with_variations(existing_product, new_sites_data, do
             country=site['country']
         ).delete()
         print(f"DEBUG: Added variation and removed site: {site['site_name']}")
-
+    
     # Update additional annotations if provided
     if additional_annotations:
         try:
@@ -848,9 +849,9 @@ def update_existing_product_with_variations(existing_product, new_sites_data, do
             print(f"✅ Updated additional annotations: {additional_annotations}")
         except Exception as e:
             print(f"⚠️ Could not update additional annotations: {e}")
-
+    
     print(f"🎯 Updated existing product '{existing_product.name}' with {len(variations_created)} variations")
-
+    
     return existing_product
 
 
@@ -976,8 +977,6 @@ def validate_document(request, document_id):
             return redirect('expert:review_document', document_id=document_id)
 
     return redirect('expert:review_document', document_id=document_id)
-
-
 def debug_annotations_for_product(document):
     """Debug function to show what annotations are available"""
     validated_annotations = Annotation.objects.filter(
@@ -1015,7 +1014,7 @@ def debug_annotations_for_product(document):
 def view_original_document(request, document_id):
     """View the original document PDF"""
     document = get_object_or_404(RawDocument, id=document_id)
-
+    
     # Check if document file exists
     if document.file:
         try:
@@ -1069,10 +1068,10 @@ def save_page_json(request, page_id):
         all_annotations = Annotation.objects.filter(
             page__document=document
         ).select_related('annotation_type', 'page').order_by('page__page_number', 'start_pos')
-
+        
         from rawdocs.views import _build_entities_map
         document_entities = _build_entities_map(all_annotations, use_display_name=True)
-
+        
         document_json = {
             'document': {
                 'id': str(document.id),
@@ -1085,7 +1084,7 @@ def save_page_json(request, page_id):
             'entities': document_entities,
             'generated_at': datetime.utcnow().isoformat() + 'Z',
         }
-
+        
         document.global_annotations_json = document_json
         document.save(update_fields=['global_annotations_json'])
 
@@ -1213,7 +1212,6 @@ def save_document_json(request, doc_id):
         print(f"❌ Erreur lors de la sauvegarde du JSON: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
-
 # ——— NOUVELLES VUES ANNOTATION EXPERT (copiées et adaptées de rawdocs) —————————————————————————————————
 
 from django.contrib.auth.decorators import login_required
@@ -1226,31 +1224,31 @@ def expert_annotation_dashboard(request):
     """Dashboard annotation pour Expert - copie de rawdocs.views.annotation_dashboard"""
     # Récupérer tous les documents validés (prêts pour annotation)
     documents = RawDocument.objects.filter(is_validated=True).select_related('owner').order_by('-created_at')
-
+    
     # Statistiques
     total_documents = documents.count()
     total_pages = sum(doc.total_pages for doc in documents)
-
+    
     # Pages avec au moins une annotation
     annotated_pages = DocumentPage.objects.filter(
         document__in=documents,
         annotations__isnull=False
     ).distinct().count()
-
+    
     # Documents en cours d'annotation (au moins une page annotée mais pas toutes)
     in_progress_docs = []
     completed_docs = []
-
+    
     for doc in documents:
         doc_pages = doc.pages.all()
         annotated_doc_pages = doc_pages.filter(annotations__isnull=False).distinct().count()
-
+        
         if annotated_doc_pages > 0:
             if annotated_doc_pages == doc.total_pages:
                 completed_docs.append(doc)
             else:
                 in_progress_docs.append(doc)
-
+    
     context = {
         'documents': documents,
         'total_documents': total_documents,
@@ -1259,7 +1257,7 @@ def expert_annotation_dashboard(request):
         'in_progress_count': len(in_progress_docs),
         'completed_count': len(completed_docs),
     }
-
+    
     return render(request, 'expert/annotation_dashboard.html', context)
 
 
@@ -1267,21 +1265,21 @@ def expert_annotation_dashboard(request):
 def expert_annotate_document(request, doc_id):
     """Interface d'annotation pour Expert - copie de rawdocs.views.annotate_document"""
     document = get_object_or_404(RawDocument, id=doc_id, is_validated=True)
-
+    
     # Pagination par page
     pages = document.pages.order_by('page_number')
     paginator = Paginator(pages, 1)
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
-
+    
     current_page = page_obj.object_list[0] if page_obj.object_list else None
-
+    
     # Types d'annotations disponibles
     annotation_types = AnnotationType.objects.all().order_by('display_name')
-
+    
     # Annotations existantes pour la page courante
     existing_annotations = current_page.annotations.all() if current_page else []
-
+    
     context = {
         'document': document,
         'page_obj': page_obj,
@@ -1290,7 +1288,7 @@ def expert_annotate_document(request, doc_id):
         'existing_annotations': existing_annotations,
         'total_pages': document.total_pages,
     }
-
+    
     return render(request, 'expert/annotate_document.html', context)
 
 
@@ -1300,23 +1298,23 @@ def expert_ai_annotate_page_groq(request, page_id):
     """Annotation automatique avec Groq pour Expert - copie de rawdocs.views.ai_annotate_page_groq"""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
-
+    
     try:
         page = get_object_or_404(DocumentPage, id=page_id)
-
+        
         # Initialiser le système Groq
         groq_annotator = GroqAnnotator()
-
+        
         # Créer les données de page
         page_data = {
             'page_num': page.page_number,
             'text': page.text_content,
             'char_count': len(page.text_content)
         }
-
+        
         # Extraire les entités avec Groq
         entities = groq_annotator.annotate_page_with_groq(page_data)
-
+        
         # Sauvegarder les annotations
         saved_annotations = []
         for entity in entities:
@@ -1329,7 +1327,7 @@ def expert_ai_annotate_page_groq(request, page_id):
                     'description': f"Expert AI type: {entity['type']}"
                 }
             )
-
+            
             # Créer l'annotation (pré-validée par l'expert)
             annotation = Annotation.objects.create(
                 page=page,
@@ -1343,7 +1341,7 @@ def expert_ai_annotate_page_groq(request, page_id):
                 created_by=request.user,
                 source='expert_ai'
             )
-
+            
             saved_annotations.append({
                 'id': annotation.id,
                 'text': annotation.selected_text,
@@ -1351,13 +1349,13 @@ def expert_ai_annotate_page_groq(request, page_id):
                 'start_pos': annotation.start_pos,
                 'end_pos': annotation.end_pos
             })
-
+        
         return JsonResponse({
             'success': True,
             'annotations': saved_annotations,
             'message': f'{len(saved_annotations)} annotations créées automatiquement'
         })
-
+        
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
@@ -1368,7 +1366,7 @@ def expert_save_manual_annotation(request):
     """Sauvegarde d'annotation manuelle pour Expert - copie de rawdocs.views.save_manual_annotation"""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
-
+    
     try:
         data = json.loads(request.body)
         page_id = data.get('page_id')
@@ -1376,9 +1374,9 @@ def expert_save_manual_annotation(request):
         entity_type = data.get('entity_type')
         start_pos = data.get('start_pos', 0)
         end_pos = data.get('end_pos', 0)
-
+        
         page = get_object_or_404(DocumentPage, id=page_id)
-
+        
         # Créer ou récupérer le type d'annotation
         annotation_type, created = AnnotationType.objects.get_or_create(
             name=entity_type,
@@ -1388,7 +1386,7 @@ def expert_save_manual_annotation(request):
                 'description': f"Expert manual type: {entity_type}"
             }
         )
-
+        
         # Créer l'annotation (pré-validée par l'expert)
         annotation = Annotation.objects.create(
             page=page,
@@ -1402,7 +1400,7 @@ def expert_save_manual_annotation(request):
             created_by=request.user,
             source='expert_manual'
         )
-
+        
         # LOG ACTION
         log_expert_action(
             user=request.user,
@@ -1410,16 +1408,16 @@ def expert_save_manual_annotation(request):
             annotation=annotation,
             reason=f"Manual annotation created by expert in page {page.page_number}"
         )
-
+        
         # Mise à jour automatique des JSON après création
         try:
             # Récupérer les annotations de la page
             annotations = page.annotations.all().select_related('annotation_type').order_by('start_pos')
-
+            
             # Construire entities -> [valeurs]
             from rawdocs.views import _build_entities_map, generate_entities_based_page_summary
             entities = _build_entities_map(annotations, use_display_name=True)
-
+            
             # JSON minimaliste pour la page
             page_json = {
                 'document': {
@@ -1435,18 +1433,18 @@ def expert_save_manual_annotation(request):
                 'entities': entities,
                 'generated_at': datetime.utcnow().isoformat() + 'Z',
             }
-
+            
             # Mise à jour du JSON de la page
             page.annotations_json = page_json
             page.save(update_fields=['annotations_json'])
-
+            
             # Mise à jour du JSON du document
             all_annotations = Annotation.objects.filter(
                 page__document=page.document
             ).select_related('annotation_type', 'page').order_by('page__page_number', 'start_pos')
-
+            
             document_entities = _build_entities_map(all_annotations, use_display_name=True)
-
+            
             document_json = {
                 'document': {
                     'id': str(page.document.id),
@@ -1459,21 +1457,21 @@ def expert_save_manual_annotation(request):
                 'entities': document_entities,
                 'generated_at': datetime.utcnow().isoformat() + 'Z',
             }
-
+            
             page.document.global_annotations_json = document_json
             page.document.save(update_fields=['global_annotations_json'])
-
+            
             print(f"✅ JSON mis à jour pour la page {page.page_number} et le document")
-
+            
         except Exception as e:
             print(f"❌ Erreur lors de la mise à jour du JSON: {str(e)}")
-
+        
         return JsonResponse({
             'success': True,
             'annotation_id': annotation.id,
             'message': 'Annotation sauvegardée avec succès et JSON mis à jour'
         })
-
+        
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
@@ -1484,7 +1482,7 @@ def expert_get_page_annotations(request, page_id):
     try:
         page = get_object_or_404(DocumentPage, id=page_id)
         annotations = page.annotations.select_related('annotation_type').order_by('start_pos')
-
+        
         annotations_data = []
         for annotation in annotations:
             annotations_data.append({
@@ -1499,12 +1497,12 @@ def expert_get_page_annotations(request, page_id):
                 'validated_at': annotation.validated_at.isoformat() if annotation.validated_at else None,
                 'validated_by': annotation.validated_by.username if annotation.validated_by else None,
             })
-
+        
         return JsonResponse({
             'success': True,
             'annotations': annotations_data
         })
-
+        
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
@@ -1515,10 +1513,10 @@ def expert_delete_annotation(request, annotation_id):
     """Suppression d'annotation pour Expert - copie de rawdocs.views.delete_annotation"""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
-
+    
     try:
         annotation = get_object_or_404(Annotation, id=annotation_id)
-
+        
         # LOG ACTION BEFORE DELETION
         log_expert_action(
             user=request.user,
@@ -1526,21 +1524,21 @@ def expert_delete_annotation(request, annotation_id):
             annotation=annotation,
             reason=f"Manual deletion by expert. Annotation was: {annotation.validation_status}"
         )
-
+        
         # Sauvegarder les références avant la suppression
         page = annotation.page
         document = page.document
-
+        
         # Supprimer l'annotation
         annotation.delete()
-
+        
         try:
             # Mise à jour du JSON de la page
             page_annotations = page.annotations.all().select_related('annotation_type').order_by('start_pos')
             from rawdocs.views import _build_entities_map, generate_entities_based_page_summary
-
+            
             page_entities = _build_entities_map(page_annotations, use_display_name=True)
-
+            
             page_json = {
                 'document': {
                     'id': str(document.id),
@@ -1555,17 +1553,17 @@ def expert_delete_annotation(request, annotation_id):
                 'entities': page_entities,
                 'generated_at': datetime.utcnow().isoformat() + 'Z',
             }
-
+            
             page.annotations_json = page_json
             page.save(update_fields=['annotations_json'])
-
+            
             # Mise à jour du JSON du document
             all_annotations = Annotation.objects.filter(
                 page__document=document
             ).select_related('annotation_type', 'page').order_by('page__page_number', 'start_pos')
-
+            
             document_entities = _build_entities_map(all_annotations, use_display_name=True)
-
+            
             document_json = {
                 'document': {
                     'id': str(document.id),
@@ -1578,20 +1576,20 @@ def expert_delete_annotation(request, annotation_id):
                 'entities': document_entities,
                 'generated_at': datetime.utcnow().isoformat() + 'Z',
             }
-
+            
             document.global_annotations_json = document_json
             document.save(update_fields=['global_annotations_json'])
-
+            
             print(f"✅ JSON mis à jour après suppression pour la page {page.page_number} et le document")
-
+            
         except Exception as e:
             print(f"❌ Erreur lors de la mise à jour du JSON après suppression: {str(e)}")
-
+        
         return JsonResponse({
             'success': True,
             'message': 'Annotation supprimée avec succès et JSON mis à jour'
         })
-
+        
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
@@ -1602,21 +1600,21 @@ def expert_validate_page_annotations(request, page_id):
     """Validation des annotations d'une page pour Expert - copie de rawdocs.views.validate_page_annotations"""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
-
+    
     try:
         page = get_object_or_404(DocumentPage, id=page_id)
-
+        
         # Valider toutes les annotations de la page
         annotations = page.annotations.filter(validation_status='pending')
         validated_count = 0
-
+        
         for annotation in annotations:
             annotation.validation_status = 'validated'
             annotation.validated_by = request.user
             annotation.validated_at = timezone.now()
             annotation.save()
             validated_count += 1
-
+            
             # LOG ACTION
             log_expert_action(
                 user=request.user,
@@ -1624,13 +1622,13 @@ def expert_validate_page_annotations(request, page_id):
                 annotation=annotation,
                 reason=f"Bulk validation by expert for page {page.page_number}"
             )
-
+        
         return JsonResponse({
             'success': True,
             'validated_count': validated_count,
             'message': f'{validated_count} annotations validées'
         })
-
+        
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
@@ -1736,8 +1734,7 @@ def expert_generate_document_annotation_summary(request, doc_id):
         document.global_annotations_json = document_json
         document.global_annotations_summary = summary
         document.global_annotations_summary_generated_at = timezone.now()
-        document.save(update_fields=['global_annotations_json', 'global_annotations_summary',
-                                     'global_annotations_summary_generated_at'])
+        document.save(update_fields=['global_annotations_json', 'global_annotations_summary', 'global_annotations_summary_generated_at'])
 
         return JsonResponse({
             'success': True,
@@ -1803,10 +1800,8 @@ def expert_view_document_annotation_json(request, doc_id):
 
         context = {
             'document': document,
-            'global_annotations_json': document.global_annotations_json if hasattr(document,
-                                                                                   'global_annotations_json') else None,
-            'global_annotations_summary': document.global_annotations_summary if hasattr(document,
-                                                                                         'global_annotations_summary') else None,
+            'global_annotations_json': document.global_annotations_json if hasattr(document, 'global_annotations_json') else None,
+            'global_annotations_summary': document.global_annotations_summary if hasattr(document, 'global_annotations_summary') else None,
             'total_annotations': total_annotations,
             'annotated_pages': annotated_pages,
             'total_pages': document.total_pages
