@@ -513,7 +513,7 @@ def get_real_filter_options():
 
     # AUTO-GENERATE for Product fields
     if Product.objects.exists():
-        print("🔍 Processing Product fields...")
+        print("Processing Product fields...")
 
         for field in Product._meta.get_fields():
             if (hasattr(field, 'get_internal_type') and
@@ -529,19 +529,19 @@ def get_real_filter_options():
                         .exclude(**{f'{field_name}': ''})
                         .values_list(field_name, flat=True)
                         .distinct()
-                        .order_by(field_name)[:20]
+                        .order_by(field_name)[:10]
                     )
 
                     if values:
                         filter_options[field_name] = values
-                        print(f"✅ Added Product filter: {field_name} ({len(values)} options)")
+                        print(f"Added Product filter: {field_name} ({len(values)} options)")
 
                 except Exception as e:
-                    print(f"❌ Error with Product.{field_name}: {e}")
+                    print(f"Error with Product.{field_name}: {e}")
 
     # AUTO-GENERATE for RawDocument fields
     if RawDocument.objects.exists():
-        print("🔍 Processing RawDocument fields...")
+        print("Processing RawDocument fields...")
 
         for field in RawDocument._meta.get_fields():
             if (hasattr(field, 'get_internal_type') and
@@ -557,34 +557,32 @@ def get_real_filter_options():
                         .exclude(**{f'{field_name}': ''})
                         .values_list(field_name, flat=True)
                         .distinct()
-                        .order_by(field_name)[:20]
+                        .order_by(field_name)[:10]
                     )
 
                     if values:
                         filter_options[field_name] = values
-                        print(f"✅ Added RawDocument filter: {field_name} ({len(values)} options)")
+                        print(f"Added RawDocument filter: {field_name} ({len(values)} options)")
 
                 except Exception as e:
-                    print(f"❌ Error with RawDocument.{field_name}: {e}")
+                    print(f"Error with RawDocument.{field_name}: {e}")
 
     # SPECIAL HANDLING for sites (relationship field)
     if ManufacturingSite.objects.exists():
-        print("🔍 Processing ManufacturingSite fields...")
+        print("Processing ManufacturingSite fields...")
 
-        # Handle sites field specially
         site_names = list(
             ManufacturingSite.objects
             .exclude(site_name__isnull=True)
             .exclude(site_name='')
             .values_list('site_name', flat=True)
             .distinct()
-            .order_by('site_name')[:20]
+            .order_by('site_name')[:10]
         )
         if site_names:
-            filter_options['sites'] = site_names  # Match your JavaScript field name
-            print(f"✅ Added sites filter: {len(site_names)} options")
+            filter_options['sites'] = site_names
+            print(f"Added sites filter: {len(site_names)} options")
 
-        # Also handle other site fields
         for field in ManufacturingSite._meta.get_fields():
             if (hasattr(field, 'get_internal_type') and
                     field.get_internal_type() in ['CharField', 'TextField'] and
@@ -599,19 +597,19 @@ def get_real_filter_options():
                         .exclude(**{f'{field_name}': ''})
                         .values_list(field_name, flat=True)
                         .distinct()
-                        .order_by(field_name)[:20]
+                        .order_by(field_name)[:10]
                     )
 
                     if values:
                         filter_options[field_name] = values
-                        print(f"✅ Added ManufacturingSite filter: {field_name} ({len(values)} options)")
+                        print(f"Added ManufacturingSite filter: {field_name} ({len(values)} options)")
 
                 except Exception as e:
-                    print(f"❌ Error with ManufacturingSite.{field_name}: {e}")
+                    print(f"Error with ManufacturingSite.{field_name}: {e}")
 
     # Handle additional annotations from Product JSONField
     if Product.objects.exists():
-        print("🔍 Processing additional annotations...")
+        print("Processing additional annotations...")
 
         all_annotation_keys = set()
         for product in Product.objects.exclude(additional_annotations__isnull=True):
@@ -627,13 +625,13 @@ def get_real_filter_options():
                             product.additional_annotations[annotation_key]):
                         values.append(str(product.additional_annotations[annotation_key]))
 
-                unique_values = list(set(values))[:20]
+                unique_values = list(set(values))[:10]
                 if unique_values:
                     filter_options[f'additional_{annotation_key}'] = unique_values
-                    print(f"✅ Added additional annotation filter: additional_{annotation_key}")
+                    print(f"Added additional annotation filter: additional_{annotation_key}")
 
             except Exception as e:
-                print(f"❌ Error with additional_{annotation_key}: {e}")
+                print(f"Error with additional_{annotation_key}: {e}")
 
     # Handle database annotations
     annotation_filters = {}
@@ -644,7 +642,7 @@ def get_real_filter_options():
                 validation_status__in=['validated', 'expert_created']
             ).exclude(selected_text='').exclude(selected_text__isnull=True)
             .values_list('selected_text', flat=True)
-            .distinct().order_by('selected_text')[:15]
+            .distinct().order_by('selected_text')[:10]
         )
 
         if unique_values:
@@ -655,7 +653,43 @@ def get_real_filter_options():
 
     filter_options['annotations'] = annotation_filters
 
-    print(f"🎉 Total filter options generated: {len(filter_options)} keys")
+    # Handle MongoDB entity filters - FIXED
+    try:
+        pipeline = [
+            {"$match": {"entities": {"$exists": True}}},
+            {"$project": {"entities": {"$objectToArray": "$entities"}}},
+            {"$unwind": "$entities"},
+            {"$group": {
+                "_id": "$entities.k",
+                "count": {"$sum": 1}
+            }}
+        ]
+
+        entity_stats = list(mongo_collection.aggregate(pipeline))
+
+        for entity in entity_stats:
+            entity_name = entity['_id']
+            if entity_name:
+                pipeline_values = [
+                    {"$match": {"entities": {"$exists": True}}},
+                    {"$project": {f"entity_values": f"$entities.{entity_name}"}},
+                    {"$unwind": "$entity_values"},
+                    {"$match": {"entity_values": {"$ne": None, "$ne": ""}}},
+                    {"$group": {"_id": "$entity_values"}},
+                    {"$sort": {"_id": 1}},
+                    {"$limit": 15}
+                ]
+
+                sample_values = list(mongo_collection.aggregate(pipeline_values))
+                if sample_values:
+                    entity_field_name = f'entity_{entity_name.lower().replace(" ", "_")}'
+                    filter_options[entity_field_name] = [val['_id'] for val in sample_values if val['_id']]
+                    print(f"Added entity filter: {entity_field_name}")
+
+    except Exception as e:
+        print(f"Error getting entity filter options: {e}")
+
+    print(f"Total filter options generated: {len(filter_options)} keys")
     return filter_options
 
 
@@ -983,37 +1017,93 @@ def generate_unified_rows(columns: List[Dict], filters: Dict) -> List[Dict]:
         if filters.get('period'):
             products = apply_period_filter(products, filters['period'])
 
-        products = products[:20]
+        products = products[:100]
 
         for product in products:
-            row_data = {}
-            has_data = False
+            # Get MongoDB data for this product's document
+            document = getattr(product, 'source_document', None)
+            if document:
+                mongo_data = mongo_collection.find_one({"document_id": str(document.id)})
+            else:
+                mongo_data = None
 
-            for column in columns:
-                field_name = column.get('name', '')
-                source = column.get('source', '')
+            # Check if this document has array fields that need expansion
+            entity_arrays = {}
+            if mongo_data:
+                for column in columns:
+                    field_name = column.get('name', '')
+                    if field_name.startswith('entity_'):
+                        entity_key = field_name.replace('entity_', '').replace('_', ' ').title()
+                        entities = mongo_data.get('entities', {})
+                        if entity_key in entities and isinstance(entities[entity_key], list):
+                            entity_arrays[field_name] = entities[entity_key]
 
-                try:
-                    if source == 'sql_product' or field_name.startswith('product_'):
-                        value = get_field_value_dynamically(product, field_name)
-                    else:
-                        # For non-product fields, try to get from related document
-                        document = getattr(product, 'source_document', None)
-                        if document:
-                            value = get_field_value_dynamically(document, field_name)
+            # If we have entity arrays, create one row per combination
+            if entity_arrays:
+                # Get the maximum length of arrays
+                max_length = max(len(arr) for arr in entity_arrays.values())
+
+                for i in range(max_length):
+                    row_data = {}
+                    has_data = False
+
+                    for column in columns:
+                        field_name = column.get('name', '')
+                        source = column.get('source', '')
+
+                        try:
+                            if field_name in entity_arrays:
+                                # Use the i-th value from the array, or empty if array is shorter
+                                values = entity_arrays[field_name]
+                                value = values[i] if i < len(values) else ''
+                            elif source == 'sql_product' or field_name.startswith('product_'):
+                                value = get_field_value_dynamically(product, field_name)
+                            else:
+                                # For non-product fields, try to get from related document
+                                if document:
+                                    value = get_field_value_dynamically(document, field_name)
+                                else:
+                                    value = ''
+
+                            if value and value not in ['', 'Field not found', 'None', 'No data', 'Error', '—']:
+                                has_data = True
+
+                            row_data[field_name] = str(value)
+
+                        except Exception as e:
+                            row_data[field_name] = f"Error: {str(e)}"
+
+                    if has_data:
+                        rows.append(row_data)
+            else:
+                # No entity arrays, create single row
+                row_data = {}
+                has_data = False
+
+                for column in columns:
+                    field_name = column.get('name', '')
+                    source = column.get('source', '')
+
+                    try:
+                        if source == 'sql_product' or field_name.startswith('product_'):
+                            value = get_field_value_dynamically(product, field_name)
                         else:
-                            value = ''
+                            # For non-product fields, try to get from related document
+                            if document:
+                                value = get_field_value_dynamically(document, field_name)
+                            else:
+                                value = ''
 
-                    if value and value not in ['', 'Field not found', 'None', 'No data', 'Error', '—']:
-                        has_data = True
+                        if value and value not in ['', 'Field not found', 'None', 'No data', 'Error', '—']:
+                            has_data = True
 
-                    row_data[field_name] = str(value)
+                        row_data[field_name] = str(value)
 
-                except Exception as e:
-                    row_data[field_name] = f"Error: {str(e)}"
+                    except Exception as e:
+                        row_data[field_name] = f"Error: {str(e)}"
 
-            if has_data:
-                rows.append(row_data)
+                if has_data:
+                    rows.append(row_data)
     else:
         # Use documents as base for non-product queries
         base_documents = RawDocument.objects.filter(is_validated=True)
@@ -1022,28 +1112,74 @@ def generate_unified_rows(columns: List[Dict], filters: Dict) -> List[Dict]:
         if filters.get('period'):
             base_documents = apply_period_filter(base_documents, filters['period'])
 
-        base_documents = base_documents.order_by('-created_at')[:20]
+        base_documents = base_documents.order_by('-created_at')[:100]
 
         for document in base_documents:
-            row_data = {}
-            has_data = False
+            # Get MongoDB data for this document
+            mongo_data = mongo_collection.find_one({"document_id": str(document.id)})
 
-            for column in columns:
-                field_name = column.get('name', '')
+            # Check if this document has array fields that need expansion
+            entity_arrays = {}
+            if mongo_data:
+                for column in columns:
+                    field_name = column.get('name', '')
+                    if field_name.startswith('entity_'):
+                        entity_key = field_name.replace('entity_', '').replace('_', ' ').title()
+                        entities = mongo_data.get('entities', {})
+                        if entity_key in entities and isinstance(entities[entity_key], list):
+                            entity_arrays[field_name] = entities[entity_key]
 
-                try:
-                    value = get_field_value_dynamically(document, field_name)
+            # If we have entity arrays, create one row per combination
+            if entity_arrays:
+                # Get the maximum length of arrays
+                max_length = max(len(arr) for arr in entity_arrays.values())
 
-                    if value and value not in ['', 'Field not found', 'None', 'No data', 'Error', '—']:
-                        has_data = True
+                for i in range(max_length):
+                    row_data = {}
+                    has_data = False
 
-                    row_data[field_name] = str(value)
+                    for column in columns:
+                        field_name = column.get('name', '')
 
-                except Exception as e:
-                    row_data[field_name] = f"Error: {str(e)}"
+                        try:
+                            if field_name in entity_arrays:
+                                # Use the i-th value from the array, or empty if array is shorter
+                                values = entity_arrays[field_name]
+                                value = values[i] if i < len(values) else ''
+                            else:
+                                value = get_field_value_dynamically(document, field_name)
 
-            if has_data:
-                rows.append(row_data)
+                            if value and value not in ['', 'Field not found', 'None', 'No data', 'Error', '—']:
+                                has_data = True
+
+                            row_data[field_name] = str(value)
+
+                        except Exception as e:
+                            row_data[field_name] = f"Error: {str(e)}"
+
+                    if has_data:
+                        rows.append(row_data)
+            else:
+                # No entity arrays, create single row
+                row_data = {}
+                has_data = False
+
+                for column in columns:
+                    field_name = column.get('name', '')
+
+                    try:
+                        value = get_field_value_dynamically(document, field_name)
+
+                        if value and value not in ['', 'Field not found', 'None', 'No data', 'Error', '—']:
+                            has_data = True
+
+                        row_data[field_name] = str(value)
+
+                    except Exception as e:
+                        row_data[field_name] = f"Error: {str(e)}"
+
+                if has_data:
+                    rows.append(row_data)
 
     return rows
 
@@ -1074,7 +1210,11 @@ def get_field_value_dynamically(obj, field_name):
                         entities = doc_data.get('entities', {})
                         if entity_key in entities:
                             values = entities[entity_key]
-                            return ', '.join(values) if isinstance(values, list) else str(values)
+                            if isinstance(values, list):
+                                # Return only the first value instead of joining all
+                                return str(values[0]) if values else ''
+                            else:
+                                return str(values)
 
                     elif field_name.startswith('metadata_'):
                         metadata_key = field_name.replace('metadata_', '')
@@ -1480,6 +1620,67 @@ def apply_filters_dynamically(queryset, model_class, filters: Dict):
 
         # Skip period filter (handled separately)
         if filter_key == 'period':
+            continue
+
+        # Special handling for product filters
+        if filter_key == 'product_name':
+            if model_class == Product:
+                queryset = queryset.filter(name__icontains=filter_value)
+                print(f"✅ Applied product_name filter to Product: {filter_value}")
+                continue
+            elif model_class == RawDocument:
+                queryset = queryset.filter(product_set__name__icontains=filter_value).distinct()
+                print(f"✅ Applied product_name filter to RawDocument: {filter_value}")
+                continue
+
+        if filter_key == 'product_active_ingredient':
+            if model_class == Product:
+                queryset = queryset.filter(active_ingredient__icontains=filter_value)
+                print(f"✅ Applied active_ingredient filter: {filter_value}")
+                continue
+            elif model_class == RawDocument:
+                queryset = queryset.filter(product_set__active_ingredient__icontains=filter_value).distinct()
+                print(f"✅ Applied active_ingredient filter to documents: {filter_value}")
+                continue
+
+        if filter_key == 'product_dosage':
+            if model_class == Product:
+                queryset = queryset.filter(dosage__icontains=filter_value)
+                print(f"✅ Applied dosage filter: {filter_value}")
+                continue
+            elif model_class == RawDocument:
+                queryset = queryset.filter(product_set__dosage__icontains=filter_value).distinct()
+                print(f"✅ Applied dosage filter to documents: {filter_value}")
+                continue
+
+        # Special handling for document filters
+        if filter_key == 'document_url':
+            if model_class == RawDocument:
+                queryset = queryset.filter(url__icontains=filter_value)
+                print(f"✅ Applied document_url filter: {filter_value}")
+                continue
+            elif model_class == Product:
+                queryset = queryset.filter(source_document__url__icontains=filter_value).distinct()
+                print(f"✅ Applied document_url filter to products: {filter_value}")
+                continue
+
+        if filter_key == 'document_title':
+            if model_class == RawDocument:
+                queryset = queryset.filter(title__icontains=filter_value)
+                print(f"✅ Applied document_title filter: {filter_value}")
+                continue
+
+        if filter_key == 'document_source':
+            if model_class == RawDocument:
+                queryset = queryset.filter(source__icontains=filter_value)
+                print(f"✅ Applied document_source filter: {filter_value}")
+                continue
+
+        # Special handling for entity and metadata filters (MongoDB)
+        if filter_key.startswith('entity_') or filter_key.startswith('metadata_'):
+            # MongoDB filters can't be applied to SQL querysets directly
+            # They need to be handled in the MongoDB query part
+            print(f"📝 MongoDB filter noted: {filter_key} = {filter_value}")
             continue
 
         try:
