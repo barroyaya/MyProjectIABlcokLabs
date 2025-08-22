@@ -1,6 +1,7 @@
 # rawdocs/views.py
 from django.utils import timezone  # AJOUT pour corriger le timezone warning
 import time
+from .groq_annotation_system import GroqAnnotator
 import os
 import json
 import requests
@@ -154,14 +155,22 @@ def register(request):
 @user_passes_test(is_metadonneur)
 def dashboard_view(request):
     docs = RawDocument.objects.filter(owner=request.user).order_by('-created_at')
+    # KPI calculés pour métadonneur
+    total_imported = docs.count()
+    validated_count = docs.filter(is_validated=True).count()
+    pending_validation_count = docs.filter(is_validated=False).count()
+
     context = {
         'documents': docs,
-        'total_scrapped': docs.count(),
+        'total_scrapped': total_imported,
         'total_planned': 150,
-        'total_completed': 0,
-        'in_progress': 12,
+        'total_completed': validated_count,
+        'in_progress': pending_validation_count,
+        'pending_validation_count': pending_validation_count,
+        'total_imported': total_imported,
+        # Placeholder charts (peuvent être ajustés plus tard)
         'pie_data': json.dumps([15, 8, 12, 5, 3]),
-        'bar_data': json.dumps([150, docs.count(), 0, 12]),
+        'bar_data': json.dumps([150, total_imported, validated_count, pending_validation_count]),
     }
     return render(request, 'rawdocs/dashboard.html', context)
 
@@ -423,25 +432,6 @@ def validate_document(request, doc_id):
                     document.total_pages = len(pages_text)
                     document.pages_extracted = True
 
-                    # Create standard annotation types
-                    types_data = [
-                        ('procedure_type', 'Code de Variation', '#3b82f6'),
-                        ('authority', 'Autorité', '#8b5cf6'),
-                        ('legal_reference', 'Référence Légale', '#f59e0b'),
-                        ('required_document', 'Document Requis', '#ef4444'),
-                        ('required_condition', 'Condition Requise', '#06b6d4'),
-                        ('delay', 'Délai', '#84cc16'),
-                    ]
-
-                    for name, display_name, color in types_data:
-                        AnnotationType.objects.get_or_create(
-                            name=name,
-                            defaults={
-                                'display_name': display_name,
-                                'color': color
-                            }
-                        )
-
                     document.is_validated = True
                     document.validated_at = datetime.now()
                     document.save()
@@ -461,17 +451,63 @@ def validate_document(request, doc_id):
 @login_required(login_url='rawdocs:login')
 @user_passes_test(is_annotateur)
 def annotation_dashboard(request):
+    # Base queryset: documents prêts pour annotation
     docs = RawDocument.objects.filter(
         is_validated=True,
         pages_extracted=True
     ).order_by('-validated_at')
 
-    paginator = Paginator(docs, 10)
-    page = request.GET.get('page')
+    from django.db.models import Q, F, Count, Sum
 
-    return render(request, 'rawdocs/annotation_dashboard.html', {
-        'documents': paginator.get_page(page)
-    })
+    # Annoter la queryset avec le nombre de pages annotées par document
+    docs_with_progress = docs.annotate(
+        annotated_pages_count=Count('pages', filter=Q(pages__is_annotated=True))
+    )
+
+    # Pagination pour le tableau (sur la queryset annotée)
+    paginator = Paginator(docs_with_progress, 10)
+    page = request.GET.get('page')
+    documents_page = paginator.get_page(page)
+
+    # KPI dynamiques
+    total_documents = docs_with_progress.count()
+    total_pages = docs_with_progress.aggregate(total=Sum('total_pages'))['total'] or 0
+
+    # Nombre de pages annotées (toutes docs confondues)
+    total_annotated_pages = DocumentPage.objects.filter(
+        document__in=docs_with_progress,
+        is_annotated=True
+    ).count()
+
+    # Documents complétés: toutes les pages annotées
+    completed_count = docs_with_progress.filter(
+        total_pages__gt=0,
+        annotated_pages_count=F('total_pages')
+    ).count()
+
+    # Documents en cours: au moins 1 page annotée mais pas toutes
+    in_progress_count = docs_with_progress.filter(
+        annotated_pages_count__gt=0
+    ).exclude(
+        annotated_pages_count=F('total_pages')
+    ).count()
+
+    to_annotate_count = max(0, total_documents - in_progress_count - completed_count)
+
+    avg_annotated_pages_per_doc = (total_annotated_pages / total_documents) if total_documents > 0 else 0
+
+    context = {
+        'documents': documents_page,
+        'total_documents': total_documents,
+        'total_pages': total_pages,
+        'total_annotated_pages': total_annotated_pages,
+        'in_progress_count': in_progress_count,
+        'completed_count': completed_count,
+        'to_annotate_count': to_annotate_count,
+        'avg_annotated_pages_per_doc': avg_annotated_pages_per_doc,
+    }
+
+    return render(request, 'rawdocs/annotation_dashboard.html', context)
 
 
 @login_required(login_url='rawdocs:login')
@@ -682,13 +718,17 @@ def ai_annotate_page_groq(request, page_id):
         page.annotations.all().delete()
 
         # Initialize RLHF annotator
-        rlhf_annotator = RLHFGroqAnnotator()
+        groq_annotator = GroqAnnotator()
 
-        # Create adaptive prompt and call GROQ
-        adaptive_prompt = rlhf_annotator.create_adaptive_prompt(page.cleaned_text)
-        response = rlhf_annotator.call_groq_api(adaptive_prompt)
+        # Create page data for dynamic annotation
+        page_data = {
+            'page_num': page.page_number,
+            'text': page.cleaned_text,
+            'char_count': len(page.cleaned_text)
+        }
 
-        annotations = rlhf_annotator.parse_groq_response(response, page.page_number) if response else []
+        # Get annotations with dynamic schema
+        annotations, schema = groq_annotator.annotate_page_with_groq(page_data)
 
         # Store in session for feedback processing
         request.session[f'ai_annotations_{page_id}'] = annotations
@@ -1787,7 +1827,7 @@ def view_page_annotation_json(request, page_id):
 @login_required
 def view_document_annotation_json(request, doc_id):
     """
-    Affiche le JSON global et résumé du document dans une vue dédiée
+    Affiche le JSON global et résumé du document dans une vue dédiée avec édition pour expert
     """
     try:
         document = get_object_or_404(RawDocument, id=doc_id, is_validated=True)
@@ -1827,3 +1867,250 @@ def view_document_annotation_json(request, doc_id):
     except Exception as e:
         messages.error(request, f"Erreur: {str(e)}")
         return redirect('rawdocs:annotation_dashboard')
+
+##################edit################
+# Ajouter cette nouvelle vue dans rawdocs/views.py
+
+@login_required
+@csrf_exempt
+def edit_annotation(request, annotation_id):
+    """
+    Permet de modifier une annotation existante
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    try:
+        annotation = get_object_or_404(Annotation, id=annotation_id)
+
+        # Vérifier les permissions
+        if not (is_annotateur(request.user) or is_expert(request.user) or is_metadonneur(request.user)):
+            return JsonResponse({'error': 'Permission denied'}, status=403)
+
+        data = json.loads(request.body)
+
+        # Vérifier les champs requis
+        required_fields = ['selected_text', 'annotation_type_id']
+        for field in required_fields:
+            if field not in data:
+                return JsonResponse({'error': f'Champ requis manquant: {field}'}, status=400)
+
+        # Obtenir le nouveau type d'annotation
+        new_annotation_type = get_object_or_404(AnnotationType, id=data['annotation_type_id'])
+
+        # Sauvegarder les anciennes valeurs pour logging
+        old_values = {
+            'selected_text': annotation.selected_text,
+            'annotation_type': annotation.annotation_type.display_name,
+            'start_pos': annotation.start_pos,
+            'end_pos': annotation.end_pos
+        }
+
+        # Mettre à jour l'annotation
+        annotation.selected_text = data['selected_text'].strip()
+        annotation.annotation_type = new_annotation_type
+
+        # Mettre à jour les positions si fournies
+        if 'start_pos' in data:
+            annotation.start_pos = int(data['start_pos'])
+        if 'end_pos' in data:
+            annotation.end_pos = int(data['end_pos'])
+
+        # Marquer comme modifiée par un humain
+        annotation.modified_by_human = True
+        annotation.human_modified_at = timezone.now()
+        annotation.last_modified_by = request.user
+
+        # Ajouter une note sur la modification
+        if annotation.ai_reasoning:
+            annotation.ai_reasoning = f"[Modifié par {request.user.username}] {annotation.ai_reasoning}"
+        else:
+            annotation.ai_reasoning = f"Annotation modifiée par {request.user.username}"
+
+        annotation.save()
+
+        # Logger la modification (optionnel)
+        print(f"✏️ Annotation {annotation_id} modifiée par {request.user.username}")
+        print(f"   Ancien texte: '{old_values['selected_text']}'")
+        print(f"   Nouveau texte: '{annotation.selected_text}'")
+        print(f"   Ancien type: {old_values['annotation_type']}")
+        print(f"   Nouveau type: {annotation.annotation_type.display_name}")
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Annotation modifiée avec succès',
+            'annotation': {
+                'id': annotation.id,
+                'selected_text': annotation.selected_text,
+                'annotation_type': {
+                    'id': annotation.annotation_type.id,
+                    'name': annotation.annotation_type.name,
+                    'display_name': annotation.annotation_type.display_name,
+                    'color': annotation.annotation_type.color
+                },
+                'confidence_score': annotation.confidence_score,
+                'ai_reasoning': annotation.ai_reasoning,
+                'start_pos': annotation.start_pos,
+                'end_pos': annotation.end_pos,
+                'modified_by_human': True
+            }
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'JSON invalide'}, status=400)
+    except Exception as e:
+        print(f"❌ Erreur modification annotation {annotation_id}: {e}")
+        return JsonResponse({'error': f'Erreur lors de la modification: {str(e)}'}, status=500)
+
+
+@login_required
+def get_annotation_details(request, annotation_id):
+    """
+    Récupère les détails d'une annotation pour l'édition
+    """
+    try:
+        annotation = get_object_or_404(Annotation, id=annotation_id)
+
+        # Vérifier les permissions
+        if not (is_annotateur(request.user) or is_expert(request.user) or is_metadonneur(request.user)):
+            return JsonResponse({'error': 'Permission denied'}, status=403)
+
+        return JsonResponse({
+            'success': True,
+            'annotation': {
+                'id': annotation.id,
+                'selected_text': annotation.selected_text,
+                'annotation_type': {
+                    'id': annotation.annotation_type.id,
+                    'name': annotation.annotation_type.name,
+                    'display_name': annotation.annotation_type.display_name,
+                    'color': annotation.annotation_type.color
+                },
+                'confidence_score': annotation.confidence_score,
+                'ai_reasoning': annotation.ai_reasoning,
+                'start_pos': annotation.start_pos,
+                'end_pos': annotation.end_pos,
+                'created_by': annotation.created_by.username if annotation.created_by else None,
+                'modified_by_human': getattr(annotation, 'modified_by_human', False)
+            }
+        })
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+# =================== NOUVELLES VUES POUR L'ÉDITION DU RÉSUMÉ GLOBAL PAR L'EXPERT ===================
+
+class GlobalSummaryEditHistory(models.Model):
+    """Model pour garder l'historique des modifications du résumé global"""
+    document = models.ForeignKey(RawDocument, on_delete=models.CASCADE)
+    old_summary = models.TextField()
+    new_summary = models.TextField()
+    modified_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    modified_at = models.DateTimeField(auto_now_add=True)
+    reason = models.TextField(blank=True)
+
+@login_required
+@user_passes_test(is_expert)
+@csrf_exempt
+def edit_global_summary(request, doc_id):
+    """
+    Permet à l'expert de modifier le résumé global du document
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    try:
+        document = get_object_or_404(RawDocument, id=doc_id)
+        data = json.loads(request.body)
+
+        if 'summary' not in data:
+            return JsonResponse({'error': 'Résumé manquant'}, status=400)
+
+        # Sauvegarder l'ancien résumé pour l'historique
+        old_summary = document.global_annotations_summary or ""
+        new_summary = data['summary'].strip()
+
+        # Créer une entrée dans l'historique
+        GlobalSummaryEditHistory.objects.create(
+            document=document,
+            old_summary=old_summary,
+            new_summary=new_summary,
+            modified_by=request.user,
+            reason=data.get('reason', 'Modification expert')
+        )
+
+        # Mettre à jour le résumé
+        document.global_annotations_summary = new_summary
+        document.save(update_fields=['global_annotations_summary'])
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Résumé global mis à jour avec succès',
+            'summary': new_summary
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'JSON invalide'}, status=400)
+    except Exception as e:
+        print(f"❌ Erreur modification résumé global du document {doc_id}: {e}")
+        return JsonResponse({'error': f'Erreur lors de la modification: {str(e)}'}, status=500)
+
+@login_required
+@user_passes_test(is_expert)
+def get_global_summary_history(request, doc_id):
+    """
+    Récupère l'historique des modifications du résumé global
+    """
+    try:
+        document = get_object_or_404(RawDocument, id=doc_id)
+        history = GlobalSummaryEditHistory.objects.filter(
+            document=document
+        ).order_by('-modified_at')
+
+        history_data = [{
+            'old_summary': entry.old_summary,
+            'new_summary': entry.new_summary,
+            'modified_by': entry.modified_by.username if entry.modified_by else "Système",
+            'modified_at': entry.modified_at.isoformat(),
+            'reason': entry.reason
+        } for entry in history]
+
+        return JsonResponse({
+            'success': True,
+            'history': history_data
+        })
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+@user_passes_test(is_expert)
+@csrf_exempt
+def validate_global_summary(request, doc_id):
+    """
+    Permet à l'expert de valider le résumé global
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    try:
+        document = get_object_or_404(RawDocument, id=doc_id)
+        data = json.loads(request.body)
+
+        # Marquer comme validé par l'expert
+        document.global_summary_validated = True
+        document.global_summary_validated_at = timezone.now()
+        document.global_summary_validated_by = request.user
+        document.expert_comments = data.get('comments', '')
+        document.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Résumé global validé avec succès'
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'JSON invalide'}, status=400)
+    except Exception as e:
+        print(f"❌ Erreur validation résumé global du document {doc_id}: {e}")
+        return JsonResponse({'error': f'Erreur lors de la validation: {str(e)}'}, status=500)

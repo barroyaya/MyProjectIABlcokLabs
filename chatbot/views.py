@@ -4,6 +4,30 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from django.db.models import Q
+from pymongo import MongoClient
+
+# Reuse Mongo settings defined in settings and expert app
+MONGO_URI = getattr(settings, "MONGO_URI", "mongodb://localhost:27017/")
+MONGO_DB = getattr(settings, "MONGO_DB", "annotations_db")
+MONGO_COLLECTION = getattr(settings, "MONGO_COLLECTION", "documents")
+
+_mongo_client: MongoClient | None = None
+_mongo_coll = None
+
+def _get_mongo_collection():
+    global _mongo_client, _mongo_coll
+    if _mongo_coll is not None:
+        return _mongo_coll
+    try:
+        _mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=2000)
+        db = _mongo_client[MONGO_DB]
+        _mongo_coll = db[MONGO_COLLECTION]
+        # ping once to ensure connectivity
+        _mongo_client.admin.command('ping')
+        return _mongo_coll
+    except Exception:
+        logger.exception("Mongo connection failed")
+        return None
 
 import json
 import os
@@ -13,6 +37,7 @@ import unicodedata
 import logging
 import requests
 import sqlite3
+import html
 from typing import List, Tuple, Dict, Any
 
 # Local utils (conservés)
@@ -71,9 +96,18 @@ LIST_PAT = re.compile(
 def is_list_intent_text(q: str) -> bool:
     return bool(LIST_PAT.search(_norm_txt(q)))
 def mentions_plural_entity(q: str) -> bool:
-    return bool(re.search(r"\b(produits|documents|sites)\b", _norm_txt(q)))
+    return bool(re.search(r"\b(produits|produit|m[eé]dicaments?|drugs?|medicines?|documents?|guidances?|guidelines?|sites?|usines?|facilities?|plants?)\b", _norm_txt(q)))
 def has_any_filter_detected(prod_filters: list, doc_filters: list) -> bool:
     return bool(prod_filters or doc_filters)
+
+# Paraphrase-friendly detection for annotations and "required documents"
+# Use accent-stripped, lower-cased text (q_lower) with ASCII-only regex
+ANNOTATION_KEYWORDS_PAT = re.compile(r"\b(annotations?|entites?|labels?)\b", re.I)
+REQDOC_KEYWORDS_PAT = re.compile(
+    r"\b((required\s+documents?|required\s+document|supporting\s+documents?|attachments?|annex(?:e|es)s?)|"
+    r"(documents?\s+(?:requis|exiges?|obligatoires?|necessaires|nécessaires)|pi[eè]ces\s+justificatives?|justificatifs?))\b",
+    re.I,
+)
 
 DOC_ALIAS_TO_FIELD = {
     "type": "doc_type",
@@ -84,17 +118,43 @@ DOC_ALIAS_TO_FIELD = {
     "version": "version",
     "uploadé par": "owner__username",
     "owner": "owner__username",
+    "contexte": "context",
+    "context": "context",
 }
 
 PROD_ALIAS_TO_FIELD = {
+    # Form/type
     "type": "form",
     "forme": "form",
+    "form": "form",
+    "galenique": "form",
+    "galénique": "form",
+    "galenic form": "form",
+    # Status
     "statut": "status",
+    "etat": "status",
+    "état": "status",
+    "status": "status",
+    "state": "status",
+    "market status": "status",
+    # Active ingredient
     "principe actif": "active_ingredient",
     "principe": "active_ingredient",
     "actif": "active_ingredient",
+    "active": "active_ingredient",
+    "active ingredient": "active_ingredient",
+    "substance active": "active_ingredient",
+    "ingredient actif": "active_ingredient",
+    # Dosage/strength
     "dosage": "dosage",
+    "dosage/force": "dosage",
+    "force": "dosage",
+    "strength": "dosage",
+    "posologie": "dosage",
+    # Name
     "nom": "name",
+    "name": "name",
+    "designation": "name",
 }
 
 DOC_FIELD_MAP = DOC_ALIAS_TO_FIELD
@@ -125,7 +185,7 @@ def _guess_fields(q_lower: str, alias_map: dict, threshold: int = 85) -> List[st
 # =============================
 
 DOC_ATTR_RE = re.compile(
-    r"\b(?:donner|donne|afficher|affiche)\s+(?:le|la|les)?\s*(?P<fields>.+?)\s+de\s+(?:du|de\s+la|des)?\s*document\s+(?P<title>.+)$",
+    r"\b(?:donner|donne|afficher|affiche|montre(?:r)?|montre-moi|liste(?:r)?)\s+(?:le|la|les)?\s*(?P<fields>.+?)\s+(?:du|de\s+la|des|pour\s+le|pour\s+la|pour\s+les)?\s*document\s+(?P<title>.+)$",
     re.IGNORECASE
 )
 PROD_ATTR_RE = re.compile(
@@ -228,6 +288,7 @@ def _infer_status_filter(q_lower: str, Product):
 
 def _infer_form_filter(q_lower: str):
     mapping = {
+        # FR
         "comprime": "Comprimé", "comprimé": "Comprimé",
         "sirop": "Sirop",
         "gelule": "Gélule", "gélule": "Gélule",
@@ -236,6 +297,21 @@ def _infer_form_filter(q_lower: str):
         "pommade": "Pommade",
         "creme": "Crème", "crème": "Crème",
         "suspension": "Suspension",
+        "injectable": "Solution",
+        # EN
+        "tablet": "Comprimé",
+        "syrup": "Sirop",
+        "capsule": "Capsule",
+        "gelcap": "Capsule",
+        "ointment": "Pommade",
+        "cream": "Crème",
+        "lotion": "Solution",
+        "solution": "Solution",
+        "suspension": "Suspension",
+        "injection": "Solution",
+        # Other common
+        "spray": "Solution",
+        "drops": "Solution",
     }
     txt = _norm_txt(q_lower)
     for k, label in mapping.items():
@@ -245,30 +321,43 @@ def _infer_form_filter(q_lower: str):
 
 def _infer_active_ingredient_filter(q_lower: str):
     txt = _norm_txt(q_lower)
-    m = re.search(r"(?:principe\s+actif\s+(?:est|=|de|:)?\s*|contien(?:t|nent)\s+|avec\s+du\s+|avec\s+de\s+)([a-z0-9\-\s]+)", txt, re.I)
-    if m:
-        val = m.group(1).strip()
-        if len(val) >= 3:
-            return ("active_ingredient", val)
-    if "principe actif non specifie" in txt or "principe actif non precise" in txt:
+    patterns = [
+        r"(?:principe\s+actif\s+(?:est|=|de|:)?\s*)([a-z0-9\-\s]+)",
+        r"(?:substance\s+active\s+(?:est|=|de|:)?\s*)([a-z0-9\-\s]+)",
+        r"(?:active\s+ingredient\s*(?:is|=|of|:)?\s*)([a-z0-9\-\s]+)",
+        r"contien(?:t|nent)\s+([a-z0-9\-\s]+)",
+        r"avec\s+(?:du|de|des)\s+([a-z0-9\-\s]+)",
+        r"with\s+(?:an|the)?\s*([a-z0-9\-\s]+)"
+    ]
+    for pat in patterns:
+        m = re.search(pat, txt, re.I)
+        if m:
+            val = m.group(1).strip()
+            if len(val) >= 3:
+                return ("active_ingredient", val)
+    if "principe actif non specifie" in txt or "principe actif non precise" in txt or "active ingredient not specified" in txt:
         return ("active_ingredient", "__NULL__")
     return None
 
 def _infer_dosage_filter(q_lower: str):
     txt = _norm_txt(q_lower).replace(",", ".")
-    m = re.search(r"\b(\d+(?:\.\d+)?)\s*(mg|g|ml)\b", txt)
+    # Accept common dosage units and separators
+    m = re.search(r"\b(\d+(?:\.\d+)?)\s*(mg|g|mcg|µg|ml|mL|IU|UI)\b", txt, re.I)
     if m:
-        val, unit = m.group(1), m.group(2)
+        val, unit = m.group(1), m.group(2).lower()
+        unit = unit.replace('µg', 'mcg').replace('ui', 'IU')
         return ("dosage", f"{val} {unit}")
-    if "dosage non specifie" in txt or "dosage non precise" in txt:
+    if re.search(r"\b(strength|force|posologie)\b.*\bnon\s+(specifie[e]?|precise[e]?)\b", txt) or \
+       "dosage non specifie" in txt or "dosage non precise" in txt:
         return ("dosage", "__NULL__")
     return None
 
 def _infer_country_filter_for_products(q_lower: str):
     txt = _norm_txt(q_lower)
-    m = re.search(r"\ben\s+([a-z\-]+)\b|\bau[x]?\s+([a-z\-]+)\b", txt)
+    # Examples: "en france", "au maroc", "in france", "in the united states"
+    m = re.search(r"\b(?:en|au|aux|in(?:\s+the)?)\s+([a-z\-\s]+)\b", txt)
     if m:
-        c = (m.group(1) or m.group(2) or "").strip()
+        c = (m.group(1) or "").strip()
         if c:
             return ("__site_country__", c)
     return None
@@ -320,9 +409,9 @@ def parse_request(question: str, intent: str, produits_qs, docs_qs):
         return {"entity":"product","mode":"detail","filters":[], "fields":fields, "title":None, "name":name, "site_name":None}
 
     # 1) Keyword entity detection
-    is_prod = bool(re.search(r"\bproduits?\b", ql))
-    is_doc  = bool(re.search(r"\bdocuments?\b|\bguidances?\b|\bguidelines?\b", ql))
-    is_site = bool(re.search(r"\bsites?\b", ql))
+    is_prod = bool(re.search(r"\b(produits?|m[eé]dicaments?|drug[s]?|medicine[s]?|produits?\s+pharmaceutiques?)\b", ql))
+    is_doc  = bool(re.search(r"\b(documents?|guidances?|guidelines?|guides?|normes?|standards?|r[eé]glement[s]?|regulations?)\b", ql))
+    is_site = bool(re.search(r"\b(sites?|usines?|manufacturing\s+site[s]?|facilit(?:y|ies)|plants?)\b", ql))
     entity = "product" if is_prod else "library" if is_doc else "site" if is_site else None
 
     # Intent liste robuste
@@ -331,6 +420,11 @@ def parse_request(question: str, intent: str, produits_qs, docs_qs):
     # Named target via quotes
     quoted = _extract_quoted(q_raw)
     name_or_title_hint = quoted[0].strip() if quoted else None
+    # If not quoted, also try patterns like: "... pour le document X" (document title as tail)
+    if not name_or_title_hint:
+        m_title = re.search(r"(?:pour|du|de|des|d[u|e]\s+la|pour\s+le|pour\s+la|concernant|au\s+sujet\s+du|au\s+sujet\s+de)\s+document\s+(.+)$", q_raw, re.I)
+        if m_title:
+            name_or_title_hint = _normalize_target(m_title.group(1))
 
     if not entity and name_or_title_hint:
         best_prod = find_best_product(name_or_title_hint, produits_qs)
@@ -368,6 +462,12 @@ def parse_request(question: str, intent: str, produits_qs, docs_qs):
         doc_filters.append(("source", m.group(1).strip()))
     if m := re.search(r"\blang(?:ue|age)\s+([a-z0-9\-\s]+)", ql, re.I):
         doc_filters.append(("language", m.group(1).strip()))
+    # AJOUT — filtre par contexte (tolere "contexte X" ou "context X")
+    if m := re.search(r"\bcontext(?:e)?\s+([a-z0-9\-\s]+)", ql, re.I):
+        doc_filters.append(("context", m.group(1).strip()))
+    # cas "contexte non specifie"
+    if re.search(r"\bcontexte\s+non\s+specifi(?:e|\u00e9)", ql, re.I):
+        doc_filters.append(("context", "__NULL__"))
     f = _infer_owner_filter_for_docs(ql)
     if f: doc_filters.append(f)
 
@@ -487,7 +587,7 @@ def list_documents(qs, filters, clean, format_date, as_md, page=1, page_size=50)
 
     items, meta = paginate(qs, page, page_size)
 
-    cols = ["Titre", "Type", "Langue", "Version", "Source", "Date de publication", "Pays"]
+    cols = ["Titre", "Type", "Langue", "Version", "Source", "Date de publication", "Pays", "Contexte"]
     rows = [{
         "Titre": clean(d.title),
         "Type": clean(getattr(d, "doc_type", "")),
@@ -496,6 +596,7 @@ def list_documents(qs, filters, clean, format_date, as_md, page=1, page_size=50)
         "Source": clean(getattr(d, 'source', '')),
         "Date de publication": format_date(getattr(d, 'publication_date', '')),
         "Pays": clean(getattr(d, 'country', '')),
+        "Contexte": clean(getattr(d, 'context', '')),
     } for d in items]
 
     return {
@@ -593,7 +694,7 @@ def detail_document(qs, fields, title_hint, raw_q, clean, format_date):
                 "render":{"markdown":"Je n’ai pas trouvé ce document. Peux-tu préciser le titre ?"}}
 
     if not fields:
-        fields = ["doc_type", "language", "version", "source", "publication_date", "country"]
+        fields = ["doc_type", "language", "version", "source", "publication_date", "country", "context"]
     parts = []
     for f in fields:
         if f == "owner_username":
@@ -679,6 +780,379 @@ def list_sites(qs, filters, clean, as_md, page=1, page_size=50):
         "data": {"cols": cols, "rows": rows},
         "render": {"markdown": md},
         "meta": meta,
+    }
+
+# =============================
+# Annotations (MongoDB)
+# =============================
+
+def _find_doc_id_by_title(docs_qs, title_hint: str) -> str | None:
+    if not title_hint:
+        return None
+    try:
+        # Try exact icontains, else fuzzy via helper
+        doc = docs_qs.filter(title__icontains=title_hint).first()
+        if not doc:
+            doc = find_best_document(title_hint, docs_qs)
+        return str(doc.id) if doc else None
+    except Exception:
+        return None
+
+
+def list_annotations_mongo(question: str, docs_qs, page: int = 1, page_size: int = 50):
+    coll = _get_mongo_collection()
+    if coll is None:
+        return {"ok": False, "entity": "annotation", "mode": "list",
+                "render": {"markdown": "Connexion MongoDB indisponible."},
+                "meta": {"page": 1, "page_size": 0, "total": 0}}
+
+    q_raw = question or ""
+    ql = _norm_txt(q_raw)
+
+    # Heuristiques simples: titre/document_id/validé/entity_key/texte
+    quoted = _extract_quoted(q_raw)
+    title_hint = quoted[0] if quoted else None
+    text_hint = quoted[1] if quoted and len(quoted) > 1 else None
+
+    # Title extraction when user says: "... pour le document X" without quotes
+    if not title_hint:
+        m = re.search(r"(?:pour|du|de|des|d[u|e]\s+la|pour\s+le|pour\s+la|concernant|au\s+sujet\s+du|au\s+sujet\s+de)\s+document\s+(.+)$", q_raw, re.I)
+        if m:
+            # Keep raw tail as potential title; also strip trailing punctuation
+            title_hint = _normalize_target(m.group(1))
+
+    doc_id = None
+    if title_hint:
+        doc_id = _find_doc_id_by_title(docs_qs, title_hint)
+
+    # Document ID explicite (ex: document 144 / id 144)
+    if not doc_id:
+        m = re.search(r"\b(?:document\s*(?:id)?\s*|id\s*)(\d{1,10})\b", ql)
+        if m:
+            doc_id = m.group(1)
+
+    validated = None
+    if re.search(r"\bvalid[ée]e?s?\b", ql):
+        validated = True
+    elif re.search(r"\bnon\s+valid[ée]e?\b|\brejet[ée]e?s?\b", ql):
+        validated = False
+
+    # Entity key (si question contient un mot/phrase d'entité entre guillemets)
+    entity_key = None
+    # Autoriser des entités multi-mots (<= 4 mots)
+    if text_hint and len(text_hint.split()) <= 4:
+        entity_key = text_hint.strip()
+        text_hint = None
+
+    # Détection d'entité ciblée depuis la question si non fournie par guillemets
+    if not entity_key:
+        ENTITY_PATTERNS = [
+            ("required document", r"\b(required\s+documents?|required\s+document|documents?\s+(requis|exig[eé]s?|obligatoires?))\b"),
+            ("authority", r"\bautorites?\b|\bauthorit(?:y|ies)\b|\bagence\b"),
+            ("delay", r"\b(delay|delays|deadline|d[eé]lai[s]?)\b"),
+            ("legal reference", r"\blegal\s+references?\b|\br[eé]f[eé]rences?\s+l[eé]gales?\b|\br[eé]f[eé]rence\s+l[eé]gale\b"),
+            ("site", r"\bsites?\b|\blocation\b|\blieu\b"),
+            ("code", r"\bcode\b|\buuid\b|\bidentifiant\b|\bid\b"),
+        ]
+        for canon, pat in ENTITY_PATTERNS:
+            if re.search(pat, ql) or re.search(pat, q_raw, re.I):
+                entity_key = canon
+                break
+
+    # Build Mongo query
+    query: Dict[str, Any] = {}
+    if doc_id:
+        query["document_id"] = str(doc_id)
+    if title_hint and not doc_id:
+        query["title"] = {"$regex": title_hint, "$options": "i"}
+    if validated is not None:
+        query["validated"] = bool(validated)
+
+    projection = {"title": 1, "document_id": 1, "entities": 1, "json.entities": 1, "validated": 1}
+
+    try:
+        # On récupère des documents correspondant (on limite avant le flatten)
+        cursor = coll.find(query, projection).limit(3000)
+        docs = list(cursor)
+    except Exception as e:
+        return {"ok": False, "entity": "annotation", "mode": "list",
+                "render": {"markdown": f"Erreur MongoDB: {e}"},
+                "meta": {"page": 1, "page_size": 0, "total": 0}}
+
+    # Flatten annotations avec mapping de synonymes pour cibler des entités
+    ENTITY_SYNONYMS = {
+        "required document": [
+            "required document", "required documents", "required_document",
+            "mandatory document", "mandatory documents",
+            "supporting document", "supporting documents",
+            "required attachment", "required attachments", "attachments required",
+            "required annex", "required annexes", "annexes requises", "annexe requise",
+            "documents requis", "document requis", "documents exiges", "documents obligatoires",
+            "documents necessaires", "documents nécessaires",
+            "pieces requises", "pièces requises", "pieces justificatives", "pièces justificatives", "justificatifs"
+        ],
+        "authority": ["authority", "autorite", "autorité", "authorities", "agence", "authority body", "regulator", "competent authority", "autorité compétente"],
+        "delay": ["delay", "delays", "deadline", "due date", "timeline", "delai", "delais", "délai", "délai(s)"],
+        "legal reference": ["legal reference", "legal_reference", "reference", "référence", "references legales", "références légales", "legal basis", "base légale"],
+        "site": ["site", "location", "lieu", "emplacement", "factory", "usine", "plant", "manufacturing site"],
+        "code": ["code", "id", "uuid", "identifiant", "identifier", "reference code", "ref"],
+    }
+    def match_entity_key(ent_name: str, target: str | None) -> bool:
+        if not target:
+            return True
+        en = _norm_txt(ent_name)
+        tg = _norm_txt(target)
+        if en == tg:
+            return True
+        # synonym match
+        for canon, syns in ENTITY_SYNONYMS.items():
+            if tg == _norm_txt(canon) and en in [_norm_txt(s) for s in syns]:
+                return True
+        return False
+
+    rows_all: List[Dict[str, Any]] = []
+    for d in docs:
+        title = d.get("title") or d.get("metadata", {}).get("title") or ""
+        did = d.get("document_id") or d.get("json", {}).get("document", {}).get("id") or ""
+        ents = d.get("entities") or d.get("json", {}).get("entities") or {}
+        if not isinstance(ents, dict):
+            continue
+        for k, values in ents.items():
+            if entity_key and not match_entity_key(k, entity_key):
+                continue
+            if not isinstance(values, (list, tuple)):
+                values = [values]
+            for v in values:
+                sv = str(v)
+                if text_hint and _norm_txt(text_hint) not in _norm_txt(sv):
+                    continue
+                rows_all.append({
+                    "Document": clean(title),
+                    "Document ID": clean(did),
+                    "Entité": clean(k),
+                    "Valeur": clean(sv),
+                    "Validé": "Oui" if d.get("validated") else "Non",
+                })
+
+    # Pagination (après flatten)
+    page = max(int(page or 1), 1)
+    page_size = min(max(int(page_size or 50), 1), 200)
+    total = len(rows_all)
+    start = (page - 1) * page_size
+    end = start + page_size
+    rows = rows_all[start:end]
+
+    cols = ["Document", "Document ID", "Entité", "Valeur", "Validé"]
+
+    def as_md_grouped_annotations(rows_subset: List[Dict[str, Any]]) -> str:
+        # Group by (Document ID -> Entité -> [Valeurs]) preserving order
+        from collections import OrderedDict
+        docs_map: "OrderedDict[str, dict]" = OrderedDict()
+        for r in rows_subset:
+            did = r.get("Document ID", "")
+            if did not in docs_map:
+                docs_map[did] = {
+                    "title": r.get("Document", ""),
+                    "entities": OrderedDict(),
+                }
+            ent = r.get("Entité", "")
+            val = r.get("Valeur", "")
+            val_status = r.get("Validé", "")
+            ents = docs_map[did]["entities"]
+            if ent not in ents:
+                ents[ent] = {"vals": [], "count": 0}
+            bucket = ents[ent]
+            # Dédoublonnage par valeur (sans le suffixe (Oui/Non))
+            base_val = val.strip()
+            if base_val not in bucket["vals"]:
+                bucket["vals"].append(base_val)
+            bucket["count"] += 1  # nombre total d'occurrences pour l'entité
+        if not docs_map:
+            return "Aucune annotation trouvée."
+        parts_md: List[str] = []
+        parts_html: List[str] = []
+        for did, info in docs_map.items():
+            title = info.get("title") or "Document"
+            # Markdown header
+            parts_md.append(f"### {title} (ID: {did})\n")
+            # HTML header
+            parts_html.append(f"<h3 style=\"margin:10px 0\">{html.escape(title)} (ID: {html.escape(str(did))})</h3>")
+            # Tri alphabétique des entités pour lisibilité
+            for ent, bucket in sorted(info["entities"].items(), key=lambda kv: kv[0].lower()):
+                vals = bucket["vals"]
+                count = bucket["count"]
+                # Entity title without occurrences count for a cleaner, professional look
+                parts_md.append(f"**{ent}**")
+                parts_html.append(f"<div><strong>{html.escape(ent)}</strong></div>")
+                # Limiter l'affichage si trop long, puis indiquer le reste
+                MAX_SHOW = 40
+                to_show = vals[:MAX_SHOW]
+                for v in to_show:
+                    parts_md.append(f"- {v}")
+                    parts_html.append(f"<li>{html.escape(v)}</li>")
+                if len(vals) > MAX_SHOW:
+                    parts_md.append(f"… et {len(vals) - MAX_SHOW} autre(s) valeur(s)")
+                    parts_html.append(f"<div>… et {len(vals) - MAX_SHOW} autre(s) valeur(s)</div>")
+                parts_md.append("")
+                parts_html.append("")
+            parts_md.append("")
+        md_out = "\n".join(parts_md).strip()
+        html_out = "\n".join(parts_html).strip()
+        return md_out, html_out
+
+    # Choose grouped markdown/html by default for readability
+    if rows:
+        md, html_out = as_md_grouped_annotations(rows)
+    else:
+        md, html_out = "Aucune annotation trouvée.", "<div>Aucune annotation trouvée.</div>"
+    return {
+        "ok": True,
+        "entity": "annotation",
+        "mode": "list",
+        "data": {"cols": cols, "rows": rows},
+        "render": {"markdown": md, "html": html_out},
+        "meta": {"page": page, "page_size": page_size, "total": total},
+    }
+
+
+def list_annotation_stats_mongo(question: str, docs_qs, page: int = 1, page_size: int = 50):
+    """Statistiques sur les annotations: group by entité, ou entité+valeur.
+    Détection simple des mots-clés: 'par entité' => group entité; 'par valeur' ou 'top' => entité + valeur.
+    """
+    coll = _get_mongo_collection()
+    if coll is None:
+        return {"ok": False, "entity": "annotation", "mode": "stats",
+                "render": {"markdown": "Connexion MongoDB indisponible."},
+                "meta": {"page": 1, "page_size": 0, "total": 0}}
+
+    q_raw = question or ""
+    ql = _norm_txt(q_raw)
+
+    quoted = _extract_quoted(q_raw)
+    title_hint = quoted[0] if quoted else None
+    text_hint = quoted[1] if quoted and len(quoted) > 1 else None
+
+    doc_id = None
+    if title_hint:
+        doc_id = _find_doc_id_by_title(docs_qs, title_hint)
+    if not doc_id:
+        m = re.search(r"\b(?:document\s*(?:id)?\s*|id\s*)(\d{1,10})\b", ql)
+        if m:
+            doc_id = m.group(1)
+
+    validated = None
+    if re.search(r"\bvalid[ée]e?s?\b", ql):
+        validated = True
+    elif re.search(r"\bnon\s+valid[ée]e?\b|\brejet[ée]e?s?\b", ql):
+        validated = False
+
+    entity_key = None
+    if text_hint and len(text_hint.split()) <= 4 and not re.search(r"\s", text_hint.strip()):
+        entity_key = text_hint
+        text_hint = None
+
+    # Déterminer regroupement
+    group_by_value = bool(re.search(r"\b(par\s+valeur|top)\b", ql))
+    # Si pas explicite mais il y a un texte libre, on fait par valeur
+    if text_hint:
+        group_by_value = True
+
+    base_match: Dict[str, Any] = {}
+    if doc_id:
+        base_match["document_id"] = str(doc_id)
+    if title_hint and not doc_id:
+        base_match["title"] = {"$regex": title_hint, "$options": "i"}
+    if validated is not None:
+        base_match["validated"] = bool(validated)
+
+    # Construit pipeline d'agrégation
+    pipeline = []
+    if base_match:
+        pipeline.append({"$match": base_match})
+    pipeline.extend([
+        {"$project": {
+            "title": 1,
+            "document_id": 1,
+            "validated": 1,
+            "ents": {"$ifNull": ["$entities", "$json.entities"]}
+        }},
+        {"$project": {"title": 1, "document_id": 1, "validated": 1, "ents": {"$objectToArray": "$ents"}}},
+        {"$unwind": "$ents"},
+        {"$project": {"title": 1, "document_id": 1, "validated": 1, "entity": "$ents.k", "values": "$ents.v"}},
+        {"$unwind": "$values"},
+    ])
+
+    # Filtres supplémentaires
+    match_more: Dict[str, Any] = {}
+    if entity_key:
+        match_more["entity"] = {"$regex": f"^{re.escape(entity_key)}$", "$options": "i"}
+    if text_hint:
+        match_more["values"] = {"$regex": text_hint, "$options": "i"}
+    if match_more:
+        pipeline.append({"$match": match_more})
+
+    if group_by_value:
+        pipeline.extend([
+            {"$group": {
+                "_id": {"Entité": "$entity", "Valeur": "$values"},
+                "Occurrences": {"$sum": 1}
+            }},
+            {"$sort": {"Occurrences": -1}},
+            {"$limit": 500}
+        ])
+    else:
+        pipeline.extend([
+            {"$group": {
+                "_id": {"Entité": "$entity"},
+                "Occurrences": {"$sum": 1}
+            }},
+            {"$sort": {"Occurrences": -1}},
+            {"$limit": 500}
+        ])
+
+    try:
+        agg = list(coll.aggregate(pipeline, allowDiskUse=True))
+    except Exception as e:
+        return {"ok": False, "entity": "annotation", "mode": "stats",
+                "render": {"markdown": f"Erreur MongoDB: {e}"},
+                "meta": {"page": 1, "page_size": 0, "total": 0}}
+
+    # Mise en forme
+    rows_all: List[Dict[str, Any]] = []
+    if group_by_value:
+        cols = ["Entité", "Valeur", "Occurrences"]
+        for it in agg:
+            _id = it.get("_id", {})
+            rows_all.append({
+                "Entité": clean(_id.get("Entité", "")),
+                "Valeur": clean(_id.get("Valeur", "")),
+                "Occurrences": it.get("Occurrences", 0),
+            })
+    else:
+        cols = ["Entité", "Occurrences"]
+        for it in agg:
+            _id = it.get("_id", {})
+            rows_all.append({
+                "Entité": clean(_id.get("Entité", "")),
+                "Occurrences": it.get("Occurrences", 0),
+            })
+
+    # Pagination
+    page = max(int(page or 1), 1)
+    page_size = min(max(int(page_size or 50), 1), 200)
+    total = len(rows_all)
+    start = (page - 1) * page_size
+    end = start + page_size
+    rows = rows_all[start:end]
+
+    md = as_md(rows, cols, empty_msg="Aucune statistique trouvée.")
+    return {
+        "ok": True,
+        "entity": "annotation",
+        "mode": "stats",
+        "data": {"cols": cols, "rows": rows},
+        "render": {"markdown": md},
+        "meta": {"page": page, "page_size": page_size, "total": total},
     }
 
 # =============================
@@ -840,7 +1314,7 @@ def chatbot_api(request):
     # Models
     from client.products.models import Product, ManufacturingSite
     from rawdocs.models import RawDocument
-    from submissions.models import Submission
+    from client.submissions.ctd_submission.models import Submission
 
     produits_qs = Product.objects.all().prefetch_related('sites')
     docs_qs = RawDocument.objects.filter(is_validated=True).select_related('owner')
@@ -909,7 +1383,7 @@ def chatbot_api(request):
     docs_str = ''
     for d in docs_qs:
         docs_str += (
-            f"- {clean(d.title)} | {clean(getattr(d, 'doc_type', ''))} | {clean(getattr(d, 'language', ''))} | Source: {clean(getattr(d, 'source', ''))}\n"
+            f"- {clean(d.title)} | {clean(getattr(d, 'doc_type', ''))} | {clean(getattr(d, 'language', ''))} | Source: {clean(getattr(d, 'source', ''))} | Contexte: {clean(getattr(d, 'context', ''))}\n"
         )
 
     subs_str = '\n'.join([
@@ -946,18 +1420,26 @@ def chatbot_api(request):
             f = _infer_country_filter_for_products(q_lower)
             if f: imp_filters.append(f)
             payload = list_products(produits_qs, imp_filters, clean, as_md, page, page_size)
-            payload["response"] = payload["render"]["markdown"]
+            payload["response"] = payload.get("render", {}).get("html") or payload.get("render", {}).get("markdown")
+            return JsonResponse(payload)
+        if re.search(r"\bannotations?\b|\bentit[eé]s?\b|\blabels?\b", q_lower):
+            # Stats si mots-clés: nombre, combien, stats, top
+            if re.search(r"\b(combien|nombre|stats?|statistiques|top)\b", q_lower):
+                payload = list_annotation_stats_mongo(question, docs_qs, page, page_size)
+            else:
+                payload = list_annotations_mongo(question, docs_qs, page, page_size)
+            payload["response"] = payload.get("render", {}).get("html") or payload.get("render", {}).get("markdown")
             return JsonResponse(payload)
         if re.search(r"\bdocuments?\b", q_lower):
             payload = list_documents(docs_qs, [], clean, format_date, as_md, page, page_size)
-            payload["response"] = payload["render"]["markdown"]
+            payload["response"] = payload.get("render", {}).get("html") or payload.get("render", {}).get("markdown")
             return JsonResponse(payload)
         if re.search(r"\bsites?\b", q_lower):
             site_filters = []
             f = _infer_country_filter_for_sites(q_lower)
             if f: site_filters.append(f)
             payload = list_sites(sites_qs, site_filters, clean, as_md, page, page_size)
-            payload["response"] = payload["render"]["markdown"]
+            payload["response"] = payload.get("render", {}).get("html") or payload.get("render", {}).get("markdown")
             return JsonResponse(payload)
         if os.environ.get('MISTRAL_API_KEY'):
             content = call_mistral(question, contexte, os.environ['MISTRAL_API_KEY'])
@@ -965,31 +1447,51 @@ def chatbot_api(request):
                                  "render":{"markdown":content}})
         return JsonResponse({'response': "Je n’ai pas bien compris la demande. Peux-tu préciser ?", "ok": False}, status=200)
 
+    # Interception annotations prioritaire (même si entity=library)
+    # Détection de ciblage: si l’utilisateur demande une entité spécifique (ex: Required Document/Authority/Delay)
+    if (
+        (entity == 'library' or re.search(r"\bdocuments?\b|\bdocument\b", q_lower))
+        and (
+            ANNOTATION_KEYWORDS_PAT.search(q_lower)
+            or REQDOC_KEYWORDS_PAT.search(q_lower)
+            or re.search(r"\bauthorit[y|e]\b|\bdelays?\b|\bd[eé]lais?\b|\blegal\s+references?\b|\bsites?\b|\bcodes?\b|\bidentifiants?\b|\buuid\b", q_lower)
+        )
+    ):
+        payload = list_annotations_mongo(question, docs_qs, page, page_size)
+        payload["response"] = payload.get("render", {}).get("html") or payload.get("render", {}).get("markdown")
+        return JsonResponse(payload)
+
     # Entity-specific handling
     if entity == 'library':
         if mode == 'list':
             payload = list_documents(docs_qs, filters, clean, format_date, as_md, page, page_size)
-            payload["response"] = payload["render"]["markdown"]
+            payload["response"] = payload.get("render", {}).get("html") or payload.get("render", {}).get("markdown")
             return JsonResponse(payload)
         else:
             payload = detail_document(docs_qs, fields, title, question, clean, format_date)
-            payload["response"] = payload["render"]["markdown"]
+            payload["response"] = payload.get("render", {}).get("html") or payload.get("render", {}).get("markdown")
             return JsonResponse(payload)
+
+    # Interception simple si l’utilisateur mentionne annotations avec entity/library
+    if entity in ('annotation', 'annotations') or (entity == 'library' and re.search(r"\bannotations?\b|\bentit[eé]s?\b|\blabels?\b", q_lower)):
+        payload = list_annotations_mongo(question, docs_qs, page, page_size)
+        payload["response"] = payload.get("render", {}).get("html") or payload.get("render", {}).get("markdown")
+        return JsonResponse(payload)
 
     if entity == 'product':
         if mode == 'list':
             payload = list_products(produits_qs, filters, clean, as_md, page, page_size)
-            payload["response"] = payload["render"]["markdown"]
+            payload["response"] = payload.get("render", {}).get("html") or payload.get("render", {}).get("markdown")
             return JsonResponse(payload)
         else:
             payload = detail_product(produits_qs, fields, name, question, clean)
-            payload["response"] = payload["render"]["markdown"]
+            payload["response"] = payload.get("render", {}).get("html") or payload.get("render", {}).get("markdown")
             return JsonResponse(payload)
 
     if entity == 'site':
         if mode == 'list':
             payload = list_sites(sites_qs, filters, clean, as_md, page, page_size)
-            payload["response"] = payload["render"]["markdown"]
+            payload["response"] = payload.get("render", {}).get("html") or payload.get("render", {}).get("markdown")
             return JsonResponse(payload)
         else:
             name_hint = parsed.get('site_name') if 'parsed' in locals() else None

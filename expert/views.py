@@ -53,47 +53,76 @@ class ExpertDashboardView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
-        # Documents ready for expert review with annotator info
-        ready_documents = RawDocument.objects.filter(
+        from django.db.models import Count, Q, F
+
+        # Base queryset: documents prêts pour révision expert
+        docs_qs = RawDocument.objects.filter(
             is_ready_for_expert=True
-        ).select_related('owner').prefetch_related('pages__annotations')
+        ).select_related('owner').prefetch_related('pages__annotations')\
+         .annotate(
+            total_ann=Count('pages__annotations'),
+            validated_ann=Count('pages__annotations', filter=Q(pages__annotations__validation_status='validated')),
+            pending_ann=Count('pages__annotations', filter=Q(pages__annotations__validation_status='pending')),
+            rejected_ann=Count('pages__annotations', filter=Q(pages__annotations__validation_status='rejected')),
+            latest_annotation=Max('pages__annotations__created_at'),
+        ).order_by('-expert_ready_at')
 
-        # Count pending annotations across all documents
-        pending_annotations = Annotation.objects.filter(
-            validation_status='pending'
-        ).count()
+        total_documents = docs_qs.count()
 
-        # Enrich documents with annotation stats
-        enriched_documents = []
-        for doc in ready_documents.order_by('-expert_ready_at')[:5]:
-            doc.annotator = doc.owner  # Add annotator field
-            doc.total_annotations = sum(page.annotations.count() for page in doc.pages.all())
-            doc.pending_annotations = sum(
-                page.annotations.filter(validation_status='pending').count() for page in doc.pages.all())
-            doc.validated_annotations = sum(
-                page.annotations.filter(validation_status='validated').count() for page in doc.pages.all())
+        # Aggregates for annotations (limités aux docs prêts)
+        ann_qs = Annotation.objects.filter(page__document__in=docs_qs)
+        total_annotations = ann_qs.count()
+        validated_annotations = ann_qs.filter(validation_status='validated').count()
+        pending_annotations = ann_qs.filter(validation_status='pending').count()
+        rejected_annotations = ann_qs.filter(validation_status='rejected').count()
 
-            # Find the latest annotation date in an optimized way
-            latest_annotation_date = Annotation.objects.filter(
-                page__document=doc
-            ).aggregate(
-                latest_date=Max('created_at')
-            )['latest_date']
+        # Répartition des documents par statut de révision
+        completed_reviews = docs_qs.filter(total_ann__gt=0, validated_ann=F('total_ann')).count()
+        # Documents avec annotations mais non totalement validés (inclut potentiellement des rejetés)
+        in_progress_reviews = docs_qs.filter(total_ann__gt=0).exclude(validated_ann=F('total_ann')).count()
+        # Documents ayant au moins une annotation rejetée
+        rejected_documents = docs_qs.filter(rejected_ann__gt=0).count()
+        # Documents sans aucune annotation encore
+        to_review_count = docs_qs.filter(total_ann=0).count()
 
-            # Use the latest annotation date or a fallback date
-            if latest_annotation_date:
-                doc.updated_at = latest_annotation_date
-            elif hasattr(doc, 'expert_ready_at') and doc.expert_ready_at:
+        # KPI dérivés
+        total_reviews = total_documents
+        validation_rate = round((validated_annotations / total_annotations) * 100) if total_annotations > 0 else 0
+        validated_documents_count = completed_reviews
+
+        # Pagination des documents pour l'onglet "Documents"
+        paginator = Paginator(docs_qs, 12)
+        page_number = self.request.GET.get('page')
+        recent_documents = paginator.get_page(page_number)
+
+        # Completer quelques champs attendus par le template
+        for doc in recent_documents:
+            doc.annotator = doc.owner
+            # updated_at basé sur la dernière annotation sinon fallback
+            if getattr(doc, 'latest_annotation', None):
+                doc.updated_at = doc.latest_annotation
+            elif getattr(doc, 'expert_ready_at', None):
                 doc.updated_at = doc.expert_ready_at
             else:
                 doc.updated_at = doc.created_at
-
-            enriched_documents.append(doc)
+            # exposer total_annotations attendu par le template
+            doc.total_annotations = getattr(doc, 'total_ann', 0)
+            doc.pending_annotations = getattr(doc, 'pending_ann', 0)
+            doc.validated_annotations = getattr(doc, 'validated_ann', 0)
 
         context.update({
-            'ready_documents_count': ready_documents.count(),
+            'ready_documents_count': total_documents,
             'pending_annotations': pending_annotations,
-            'recent_documents': enriched_documents,
+            'recent_documents': recent_documents,
+            'total_documents': total_documents,
+            'total_annotations': total_annotations,
+            'completed_reviews': completed_reviews,
+            'in_progress_reviews': in_progress_reviews,
+            'rejected_documents': rejected_documents,
+            'total_reviews': total_reviews,
+            'validation_rate': validation_rate,
+            'validated_documents_count': validated_documents_count,
+            'to_review_count': to_review_count,
         })
         return context
 
@@ -1114,6 +1143,333 @@ def save_page_json(request, page_id):
 
 @expert_required
 @csrf_exempt
+#################
+# À ajouter dans expert/views.py
+
+@expert_required
+@csrf_exempt
+def save_summary_changes(request, doc_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    try:
+        document = get_object_or_404(RawDocument, id=doc_id)
+        payload = json.loads(request.body)
+        new_summary = (payload.get('summary_content') or '').strip()
+        if not new_summary:
+            return JsonResponse({'error': 'Summary cannot be empty'}, status=400)
+
+        old_summary = document.global_annotations_summary or ""
+
+        # 1) sauver le résumé
+        document.global_annotations_summary = new_summary
+        document.global_annotations_summary_generated_at = timezone.now()
+        document.save(update_fields=['global_annotations_summary', 'global_annotations_summary_generated_at'])
+
+        # 2) préparer JSON/entités
+        current_json = document.global_annotations_json or {}
+        current_json.setdefault('document', {})
+        current_entities = current_json.get('entities', {}) or {}
+        allowed_keys = list(current_entities.keys())  # on ne crée pas de nouveau type
+
+        # 3) IA → propositions
+        proposed = ai_propose_entity_updates(old_summary, new_summary, current_entities, allowed_keys)
+
+        # 4) appliquer en "replace-only"
+        updated_entities, changed_keys, human_diffs = _replace_only(current_entities, proposed)
+        if changed_keys:
+            current_json['entities'] = updated_entities
+
+        # métadonnées de mise à jour
+        current_json['last_updated'] = timezone.now().isoformat()
+        current_json['last_updated_by'] = request.user.username
+        current_json['document'].update({
+            'summary': new_summary,
+            'summary_updated_at': timezone.now().isoformat(),
+            'summary_updated_by': request.user.username,
+        })
+
+        document.global_annotations_json = current_json
+        document.save(update_fields=['global_annotations_json'])
+
+        # (optionnel) push Mongo ici…
+
+        # Log
+        reason = "Summary edited; IA replace-only"
+        if human_diffs:
+            reason += " | " + " ; ".join(human_diffs[:5])
+        log_expert_action(
+            user=request.user,
+            action='summary_edited',
+            annotation=None,
+            document_id=document.id,
+            document_title=document.title,
+            old_text=old_summary,
+            new_text=new_summary,
+            reason=reason
+        )
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Résumé sauvegardé',
+            'updated_json': current_json,
+            'changed_keys': changed_keys,
+            'entities_changes': human_diffs,
+        })
+    except Exception as e:
+        print(f"❌ save_summary_changes error: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+
+# --- helpers backend : extraction stricte + nettoyage ---
+
+import re
+
+def extract_entities_from_text(text: str) -> dict:
+    """
+    Extraction côté serveur (stricte) pour limiter le bruit.
+    Retourne un dict {Type: [valeurs]} avec clés 'brutes' (Product, Dosage, ...).
+    """
+    patterns = {
+        'Product': [
+            r'(?:produit|m[ée]dicament)\s*:?\s*([A-Z][\wÀ-ÿ\s\-\/]{2,40})',
+            r'^(?:le\s+)?([A-Z][\wÀ-ÿ\s\-\/]{3,40})\s+(?:est|sera|contient)\b'
+        ],
+        'Dosage': [
+            r'\b([0-9]+(?:[.,][0-9]+)?\s*(?:mg|g|ml|l|µg|mcg|%|UI))\b'
+        ],
+        'Substance Active': [
+            r'(?:substance active|principe actif)\s*:?\s*([A-Z][\wÀ-ÿ\s\-]{2,40})',
+            r'(?:contient|à base de)\s+([A-Z][\wÀ-ÿ\s\-]{3,40})'
+        ],
+        'Site': [
+            r'(?:site|usine|fabricant)\s*:?\s*([A-Z][\wÀ-ÿ\s\.\-]{2,40})',
+            r'(?:fabriqu[ée]|produit)\s*(?:à|par)\s*([A-Z][\wÀ-ÿ\s\.\-]{2,40})'
+        ],
+        'Pays': [
+            r'(?:pays|country)\s*:?\s*([A-Z][\wÀ-ÿ\s\-]{2,30})',
+            r'(?:en|au|aux)\s+([A-Z][\wÀ-ÿ\s\-]{4,25})(?=[\s,\.]|$)'
+        ],
+    }
+
+    out = {}
+    for etype, regs in patterns.items():
+        vals = set()
+        for rg in regs:
+            for m in re.finditer(rg, text, re.IGNORECASE | re.MULTILINE):
+                v = (m.group(1) or '').strip().rstrip('.,;:')
+                if v and 1 < len(v) <= 80:
+                    vals.add(v)
+        if vals:
+            out[etype] = list(sorted(vals))
+    return out
+
+
+def _clean_values_for_type(key: str, values: list[str]) -> list[str]:
+    """Filtre fort par type pour éviter le bruit + déduplication canonique."""
+    def norm(s: str) -> str:
+        return re.sub(r'\s+', ' ', s.strip())
+
+    seen = set()
+    keep = []
+
+    if key.lower() == 'dosage':
+        rx = re.compile(r'^[0-9]+(?:[.,][0-9]+)?\s*(?:mg|g|ml|l|µg|mcg|%|UI)$', re.IGNORECASE)
+        for v in values:
+            vv = norm(v)
+            if rx.match(vv):
+                k = vv.lower()
+                if k not in seen:
+                    seen.add(k); keep.append(vv)
+        return keep
+
+    # pour les autres, on enlève les fragments trop courts / mots vides
+    stop = {'de','du','des','et','la','le','les','à','au','aux','pour','sur','dans','par','avec'}
+    for v in values:
+        vv = norm(v)
+        if 2 < len(vv) <= 80 and vv.lower() not in stop:
+            k = vv.lower()
+            if k not in seen:
+                seen.add(k); keep.append(vv)
+    return keep
+
+
+def _canonical_key(key: str, existing_keys: list[str]) -> str | None:
+    """Mappe 'product' -> 'Product' etc. On ne crée JAMAIS de nouvelle clé."""
+    for ek in existing_keys:
+        if ek.lower() == key.lower():
+            return ek
+    return None
+
+
+def update_document_json_with_entities_replace_only(document, new_entities: dict) -> tuple[dict, list[str]]:
+    """
+    Remplace les valeurs des entités EXISTANTES uniquement, sans en créer.
+    Nettoie et déduplique. Retourne (json_mis_a_jour, liste_cles_modifiees).
+    """
+    current_json = document.global_annotations_json or {}
+    entities = current_json.get('entities', {}) or {}
+    changed = []
+
+    existing_keys = list(entities.keys())
+    if not existing_keys:
+        # Rien à faire si pas d'entités existantes
+        return current_json, changed
+
+    for raw_key, values in (new_entities or {}).items():
+        canon = _canonical_key(raw_key, existing_keys)
+        if not canon:
+            continue  # on ignore les types non présents pour éviter d'en créer
+        cleaned = _clean_values_for_type(canon, values or [])
+        if cleaned and entities.get(canon) != cleaned:
+            entities[canon] = cleaned
+            changed.append(canon)
+
+    if changed:
+        current_json['entities'] = entities
+        current_json['last_updated'] = timezone.now().isoformat()
+        document.global_annotations_json = current_json
+        document.save(update_fields=['global_annotations_json'])
+
+    return current_json, changed
+
+####################
+import difflib, json, re
+from typing import Dict, List, Tuple
+from rawdocs.groq_annotation_system import GroqAnnotator
+import os, difflib, json, re
+from typing import Dict, List, Tuple
+try:
+    from groq import Groq  # SDK officiel
+except Exception:
+    Groq = None
+
+from rawdocs.groq_annotation_system import GroqAnnotator
+
+def _normalize_values(values: List[str]) -> List[str]:
+    """trim + dédup (insensible à la casse) + espaces normalisés"""
+    seen, out = set(), []
+    for v in values or []:
+        vv = re.sub(r'\s+', ' ', (v or '').strip())
+        key = vv.lower()
+        if vv and key not in seen:
+            seen.add(key); out.append(vv)
+    return out
+
+
+def _replace_only(existing_entities: Dict[str, List[str]],
+                  proposed_changes: Dict[str, List[str]]) -> Tuple[Dict[str, List[str]], List[str], List[str]]:
+    """
+    Applique des changements SEULEMENT sur les clés déjà existantes.
+    Retourne (entities_mises_a_jour, keys_modifiées, traces_humaines)
+    """
+    if not existing_entities:
+        return existing_entities, [], []
+
+    allowed = {k: k for k in existing_entities.keys()}  # map canonique
+    changed_keys, human_diffs = [], []
+
+    for raw_k, vals in (proposed_changes or {}).items():
+        # ne pas créer de nouveaux types : on ne garde que les clés existantes (match insensible casse)
+        canon = next((ek for ek in allowed if ek.lower() == (raw_k or '').lower()), None)
+        if not canon:
+            continue
+
+        new_vals = _normalize_values(vals)
+        old_vals = existing_entities.get(canon, [])
+        if new_vals != old_vals:
+            existing_entities[canon] = new_vals
+            changed_keys.append(canon)
+            human_diffs.append(f"{canon}: {old_vals} → {new_vals}")
+
+    return existing_entities, changed_keys, human_diffs
+
+
+def ai_propose_entity_updates(old_summary: str,
+                              new_summary: str,
+                              current_entities: Dict[str, List[str]],
+                              allowed_keys: List[str]) -> Dict[str, List[str]]:
+    diff = "\n".join(difflib.unified_diff(
+        (old_summary or "").splitlines(),
+        (new_summary or "").splitlines(),
+        fromfile="before", tofile="after", lineterm=""
+    ))
+
+    system = (
+        "You are a strict information-extraction assistant. "
+        "Update ONLY existing entity types if the new summary clearly changes them. "
+        "Do not invent new types. If unsure, omit it. Output JSON only."
+    )
+    user = f"""
+Allowed entity types: {allowed_keys}
+
+Current entities:
+{json.dumps(current_entities, ensure_ascii=False)}
+
+Old summary:
+\"\"\"{old_summary or ''}\"\"\"
+
+New summary:
+\"\"\"{new_summary or ''}\"\"\"
+
+Unified diff:
+{diff}
+
+Return EXACTLY:
+{{"changes": {{"<Type>": ["new", "values"]}}}}
+""".strip()
+
+    content = None
+
+    # A) SDK officiel Groq (recommandé)
+    if Groq is not None:
+        try:
+            client = Groq(api_key=getattr(settings, "GROQ_API_KEY", os.getenv("GROQ_API_KEY")))
+            resp = client.chat.completions.create(
+                model=getattr(settings, "GROQ_MODEL", "llama3-70b-8192"),
+                messages=[{"role": "system", "content": system},
+                          {"role": "user", "content": user}],
+                temperature=0.1,
+                max_tokens=400,
+                response_format={"type": "json_object"},
+            )
+            content = resp.choices[0].message.content
+        except Exception as e:
+            print(f"⚠️ GROQ SDK path failed: {e}")
+
+    # B) Fallback via votre GroqAnnotator s'il expose une méthode utilisable
+    if not content:
+        try:
+            ga = GroqAnnotator()
+            # Essayez une méthode JSON si elle existe dans votre classe
+            for m in ("chat_json", "complete_json", "ask_json"):
+                if hasattr(ga, m):
+                    content = getattr(ga, m)(
+                        system=system, user=user,
+                        model=getattr(settings, "GROQ_MODEL", "llama3-70b-8192"),
+                        temperature=0.1, max_tokens=400
+                    )
+                    break
+        except Exception as e:
+            print(f"⚠️ GroqAnnotator fallback failed: {e}")
+
+    if not content:
+        return {}  # IA indispo → pas de modif
+
+    try:
+        data = json.loads(content) if isinstance(content, str) else content
+        raw_changes = data.get("changes", {}) if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+    # Filtrer: uniquement les clés existantes
+    filtered = {}
+    for k, vals in (raw_changes or {}).items():
+        if any(k.lower() == ak.lower() for ak in allowed_keys):
+            filtered[k] = _normalize_values(vals)
+    return filtered
+
+
 def save_document_json(request, doc_id):
     """Sauvegarde du JSON global modifié d'un document (et stockage MongoDB avec métadonnées complètes)"""
     if request.method != 'POST':
@@ -1780,10 +2136,28 @@ def expert_view_page_annotation_json(request, page_id):
 
 @expert_required
 def expert_view_document_annotation_json(request, doc_id):
-    """Visualisation du JSON et résumé global d'un document - Expert - copie de rawdocs.views.view_document_annotation_json"""
+    """Visualisation et édition du JSON et résumé global d'un document - Expert"""
     try:
         document = get_object_or_404(RawDocument, id=doc_id, is_validated=True)
 
+        if request.method == 'POST' and request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            # Mode édition AJAX
+            try:
+                data = json.loads(request.body)
+                action = data.get('action', '')
+                
+                if action == 'save_summary':
+                    # Déléguer à la fonction existante
+                    return save_summary_changes(request, doc_id)
+                elif action == 'save_json':
+                    # Déléguer à la fonction existante
+                    return save_document_json(request, doc_id)
+                else:
+                    return JsonResponse({'error': 'Action non reconnue'}, status=400)
+            except Exception as e:
+                return JsonResponse({'error': str(e)}, status=500)
+
+        # Mode affichage GET
         # Si pas encore généré, le générer
         if not hasattr(document, 'global_annotations_json') or not document.global_annotations_json:
             # Déclencher la génération
@@ -1794,17 +2168,27 @@ def expert_view_document_annotation_json(request, doc_id):
             expert_generate_document_annotation_summary(fake_request, doc_id)
             document.refresh_from_db()
 
+        # Enrichir le contexte pour l'édition
+        document_json = document.global_annotations_json if hasattr(document, 'global_annotations_json') else {}
+        allowed_entity_types = list(document_json.get('entities', {}).keys())
+        document_summary = document.global_annotations_summary if hasattr(document, 'global_annotations_summary') else ""
+
         # Statistiques
         total_annotations = sum(page.annotations.count() for page in document.pages.all())
         annotated_pages = document.pages.filter(annotations__isnull=False).distinct().count()
 
         context = {
             'document': document,
-            'global_annotations_json': document.global_annotations_json if hasattr(document, 'global_annotations_json') else None,
-            'global_annotations_summary': document.global_annotations_summary if hasattr(document, 'global_annotations_summary') else None,
+            'global_annotations_json': document_json,
+            'global_annotations_summary': document_summary,
             'total_annotations': total_annotations,
             'annotated_pages': annotated_pages,
-            'total_pages': document.total_pages
+            'total_pages': document.total_pages,
+            'allowed_entity_types': allowed_entity_types,
+            'can_edit': True,  # Activer l'interface d'édition
+            'patterns': extract_entities_from_text.__doc__,  # Documentation des patterns d'extraction
+            'last_updated': document_json.get('last_updated'),
+            'last_updated_by': document_json.get('last_updated_by'),
         }
 
         return render(request, 'expert/view_document_annotation_json.html', context)
