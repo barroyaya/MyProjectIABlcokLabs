@@ -166,23 +166,34 @@ def register(request):
 @user_passes_test(is_metadonneur)
 def dashboard_view(request):
     docs = RawDocument.objects.filter(owner=request.user).order_by('-created_at')
-    # KPI calculés pour métadonneur
-    total_imported = docs.count()
-    validated_count = docs.filter(is_validated=True).count()
+
+    # Définir total_planned par défaut si pas encore défini
+    total_planned = request.session.get('total_planned', 0)
+
+    # Si formulaire POST pour mettre à jour total_planned
+    if request.method == 'POST':
+        new_planned = request.POST.get('planned_number')
+        if new_planned and new_planned.isdigit():
+            total_planned = int(new_planned)
+            request.session['total_planned'] = total_planned
+
+    # KPI calculés
+    total_scrapped = docs.count()
+    total_completed = docs.filter(is_validated=True).count()
     pending_validation_count = docs.filter(is_validated=False).count()
 
     context = {
         'documents': docs,
-        'total_scrapped': total_imported,
-        'total_planned': 150,
-        'total_completed': validated_count,
-        'in_progress': pending_validation_count,
+        'total_scrapped': total_scrapped,
+        'total_planned': total_planned,
+        'total_completed': total_completed,
         'pending_validation_count': pending_validation_count,
-        'total_imported': total_imported,
-        'total_in_reextraction': total_imported,
-        # Placeholder charts (peuvent être ajustés plus tard)
-        'pie_data': json.dumps([15, 8, 12, 5, 3]),
-        'bar_data': json.dumps([150, total_imported, validated_count, pending_validation_count]),
+        'bar_data': json.dumps([total_planned, total_scrapped, total_completed, pending_validation_count]),
+        'pie_data': json.dumps([
+            total_planned,  # Planifiés
+            total_completed,  # Validés
+            pending_validation_count  # En attente
+        ]),
     }
     return render(request, 'rawdocs/dashboard.html', context)
 
