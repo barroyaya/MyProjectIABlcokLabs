@@ -22,13 +22,13 @@ Selon votre rôle (_Métadonneur_, _Annotateur_, _Expert_, ou _Client_), vous b�
 
 ## 👤 Comptes de Démonstration
 
-| Rôle         | Username    | Password   |
-|--------------|-------------|------------|
+| Rôle         | Username    | Password  |
+|--------------|-------------|-----------|
 | Métadonneur  | Metadonneur | meta@12345 |
 | Annotateur   | Annotateur  | anno@12345 |
-| Expert       | Expert      | exp@12345  |
-| Client       | Client      | cli@12345  |
-| Dev Metier   | Dev         | devn@12345 |
+| Expert       | Expert      | exp@12345 |
+| Client       | Client      | cli@12345 |
+| Dev Metier   | Dev         | dev@12345 |
 
 ---
 
