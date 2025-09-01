@@ -1,825 +1,863 @@
-{#template/expert/view_page_annotation_json.html#}
 {% extends "base.html" %}
 {% load static %}
-{% load expert_extras %}
-{% block title %}JSON Annotations Expert - Page {{ page.page_number }} – RegExpert{% endblock %}
-
+{% block title %}JSON Page {{ current_page_num }} - {{ document.title }}{% endblock %}
 {% block content %}
-<link rel="stylesheet" href="{% static 'rawdocs/css/rlhf_styles.css' %}">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<!-- JSON DATA SAFE PASSING -->
+{% if annotations_json %}
+{{ annotations_json|json_script:"json-data" }}
+{% else %}
+<script id="json-data" type="application/json">{}</script>
+{% endif %}
+
+<!-- Monaco loader to match global view -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.39.0/min/vs/loader.min.js"></script>
 
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css');
+
 :root {
-    --pharma-primary: #3b82f6;
-    --pharma-accent: #10b981;
-    --pharma-info: #06b6d4;
-    --pharma-bg-card: #ffffff;
-    --pharma-bg: #f8fafc;
-    --pharma-text: #1e293b;
-    --pharma-text-soft: #64748b;
-    --pharma-border: #e2e8f0;
-    --pharma-radius: 12px;
-    --pharma-radius-sm: 8px;
-    --pharma-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
-    --pharma-glass: rgba(255, 255, 255, 0.85);
-    --pharma-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --pharma-primary: #0ea5e9;
+  --pharma-primary-dark: #0284c7;
+  --pharma-primary-light: #38bdf8;
+  --pharma-accent: #10b981;
+  --pharma-accent-light: #34d399;
+  --pharma-success: #059669;
+  --pharma-warn: #f59e0b;
+  --pharma-error: #dc2626;
+  --pharma-text: #1f2937;
+  --pharma-text-soft: #6b7280;
+  --pharma-bg: #f8fafc;
+  --pharma-card: #ffffff;
+  --pharma-border: #e2e8f0;
+  --pharma-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --pharma-radius: 16px;
+  --pharma-radius-sm: 12px;
+  --pharma-transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 body {
-    background-color: var(--pharma-bg);
-    color: var(--pharma-text);
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  min-height: 100vh;
+  color: var(--pharma-text);
+  margin: 0;
+  padding: 0;
 }
 
-/* Header Styles */
-.annotation-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 1.5rem;
-    background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
-    border-radius: var(--pharma-radius);
-    padding: 1.5rem 2rem;
-    margin-bottom: 2rem;
-    border: 1px solid var(--pharma-border);
-    box-shadow: var(--pharma-shadow);
+.main-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  animation: fadeInUp 0.5s ease-out;
 }
 
-.header-info h2 {
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: var(--pharma-text);
-    margin-bottom: 0.5rem;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
+.card {
+  background: var(--pharma-card);
+  border-radius: var(--pharma-radius);
+  box-shadow: var(--pharma-shadow);
+  border: 1px solid var(--pharma-border);
+  transition: var(--pharma-transition);
+  margin-bottom: 2rem;
+  overflow: hidden;
 }
 
-.header-info h2 i {
-    color: var(--pharma-primary);
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+/* Header */
+.document-header {
+  background: linear-gradient(135deg, var(--pharma-primary), var(--pharma-accent));
+  color: #fff;
+  padding: 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.header-info h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 0.75rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .document-meta {
-    display: flex;
-    gap: 1.5rem;
-    flex-wrap: wrap;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  opacity: 0.9;
 }
 
 .meta-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.95rem;
-    color: var(--pharma-text-soft);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.9rem;
 }
 
-.meta-item i {
-    color: var(--pharma-primary);
-    width: 18px;
-    text-align: center;
+.header-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
 }
 
-/* Card Styles */
-.json-container {
-    background: var(--pharma-bg-card);
-    border-radius: var(--pharma-radius);
-    box-shadow: var(--pharma-shadow);
-    border: 1px solid var(--pharma-border);
-    margin-bottom: 2rem;
-    padding: 2rem;
-    transition: var(--pharma-transition);
+.btn-outline {
+  padding: 0.6rem 1.2rem;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  text-decoration: none;
+  border-radius: 10px;
+  font-weight: 500;
+  transition: var(--pharma-transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
 }
 
-.json-container:hover {
-    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+.btn-outline:hover {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+  text-decoration: none;
+  transform: translateY(-1px);
 }
 
-.json-container h3 {
-    font-size: 1.4rem;
-    font-weight: 600;
-    margin-bottom: 1.5rem;
-    color: var(--pharma-text);
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
+/* Page Navigation */
+.page-navigation {
+  background: var(--pharma-card);
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid var(--pharma-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
-.json-container h3 i {
-    color: var(--pharma-primary);
+.page-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
-/* JSON Display - Sera redéfini plus bas avec les améliorations */
-
-/* Syntax Highlighting for JSON - Style MongoDB/VS Code */
-.json-display .json-key { 
-    color: #0451a5; 
-    font-weight: 600; 
-}
-.json-display .json-string { 
-    color: #0a7d0a; 
-}
-.json-display .json-number { 
-    color: #098658; 
-    font-weight: 500;
-}
-.json-display .json-boolean { 
-    color: #0000ff; 
-    font-weight: 600;
-}
-.json-display .json-null { 
-    color: #0000ff; 
-    font-weight: 600;
-    font-style: italic;
-}
-.json-display .json-bracket { 
-    color: #000000; 
-    font-weight: bold;
-}
-.json-display .json-comma { 
-    color: #000000; 
+.nav-btn {
+  padding: 0.6rem 1.2rem;
+  background: var(--pharma-primary);
+  color: #fff;
+  text-decoration: none;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: var(--pharma-transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: none;
+  cursor: pointer;
 }
 
-/* Numéros de ligne */
-.json-display.json-with-lines {
-    counter-reset: line-counter;
-}
-.json-display .line-number {
-    display: inline-block;
-    width: 3em;
-    padding-right: 1em;
-    color: #858585;
-    font-size: 0.85em;
-    text-align: right;
-    user-select: none;
-    border-right: 1px solid #e0e0e0;
-    margin-right: 1em;
-    background: #f8f9fa;
-}
-.json-display .line-content {
-    display: inline;
+.nav-btn:hover {
+  background: var(--pharma-primary-dark);
+  color: #fff;
+  text-decoration: none;
+  transform: translateY(-1px);
 }
 
-/* Amélioration de l'affichage JSON */
-.json-display {
-    background: #ffffff;
-    border: 2px solid #e9ecef;
-    border-radius: var(--pharma-radius-sm);
-    padding: 0;
-    font-family: 'Fira Code', 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-    font-size: 0.875rem;
-    line-height: 1.5;
-    overflow-x: auto;
-    white-space: pre;
-    max-height: 600px;
-    overflow-y: auto;
-    color: #24292e;
-    position: relative;
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+.nav-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
 }
 
-.json-display::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-.json-display::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 4px;
-}
-.json-display::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
-    border-radius: 4px;
-}
-.json-display::-webkit-scrollbar-thumb:hover {
-    background: #a8a8a8;
+.page-indicator-modern {
+  background: linear-gradient(135deg, var(--pharma-primary), var(--pharma-accent));
+  color: #fff;
+  padding: 0.6rem 1.2rem;
+  border-radius: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
 }
 
-/* Summary Section */
-.summary-container {
-    background: linear-gradient(120deg, #f0f9ff 70%, #e0f2fe 100%);
-    border: 1px solid var(--pharma-info);
-    border-radius: var(--pharma-radius);
-    margin-bottom: 2rem;
-    box-shadow: var(--pharma-shadow);
-    padding: 2rem;
-    transition: var(--pharma-transition);
+.expert-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
 }
 
-.summary-container:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(6, 182, 212, 0.15);
+/* Summary Card */
+.summary-card {
+  background: var(--pharma-card);
+  border: 1px solid var(--pharma-border);
+  border-radius: var(--pharma-radius);
+  box-shadow: var(--pharma-shadow);
+  margin: 1.25rem 0;
 }
 
-.summary-text {
-    background: var(--pharma-bg-card);
-    border-radius: var(--pharma-radius-sm);
-    padding: 1.5rem;
-    line-height: 1.8;
-    font-size: 1.05rem;
-    color: var(--pharma-text);
-    border: 1px solid var(--pharma-border);
+.summary-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--pharma-border);
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.05), rgba(16, 185, 129, 0.05));
 }
 
-/* Stats Grid */
-.stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 2.5rem;
+.summary-head h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 600;
+  color: var(--pharma-text);
 }
 
-.stat-card {
-    background: var(--pharma-bg-card);
-    border: 1px solid var(--pharma-border);
-    border-radius: var(--pharma-radius);
-    padding: 1.5rem;
-    text-align: center;
-    box-shadow: var(--pharma-shadow);
-    transition: var(--pharma-transition);
+.summary-body {
+  padding: 1.25rem 1.5rem;
 }
 
-.stat-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.15);
+.summary-content {
+  background: #fafbfc;
+  border: 1px solid var(--pharma-border);
+  border-radius: 10px;
+  padding: 1.5rem;
+  margin: 1rem 0;
+  line-height: 1.6;
+  font-size: 1rem;
+  color: var(--pharma-text);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
-.stat-value {
-    font-size: 2rem;
-    font-weight: 700;
-    color: var(--pharma-primary);
-    display: block;
-    margin-bottom: 0.25rem;
+.badge-pill {
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  border: 1px solid transparent;
 }
 
-.stat-label {
-    font-size: 0.95rem;
-    color: var(--pharma-text-soft);
-    margin-top: 0.5rem;
-    font-weight: 500;
+.badge-ok {
+  background: rgba(5, 150, 105, 0.12);
+  color: #047857;
+  border-color: rgba(5, 150, 105, 0.25);
 }
 
-/* Buttons */
-.btn-action {
-    background: linear-gradient(90deg, var(--pharma-primary), var(--pharma-accent));
-    color: #fff;
-    border: none;
-    border-radius: var(--pharma-radius-sm);
-    padding: 0.75rem 1.5rem;
-    font-weight: 600;
-    font-size: 1rem;
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
-    transition: var(--pharma-transition);
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    cursor: pointer;
+.badge-warn {
+  background: rgba(245, 158, 11, 0.12);
+  color: #a16207;
+  border-color: rgba(245, 158, 11, 0.25);
 }
 
-.btn-action:hover {
-    background: linear-gradient(90deg, var(--pharma-accent), var(--pharma-primary));
-    color: #fff;
-    transform: translateY(-2px);
-    box-shadow: 0 8px 16px rgba(16, 185, 129, 0.2);
+/* JSON Editor Styles */
+.json-editor-card {
+  background: var(--pharma-card);
+  border: 1px solid var(--pharma-border);
+  border-radius: var(--pharma-radius);
+  box-shadow: var(--pharma-shadow);
+  margin: 1.25rem 0;
 }
 
-.btn-action i {
-    font-size: 0.9em;
+.json-editor-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--pharma-border);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05), rgba(52, 211, 153, 0.05));
+}
+
+.json-editor-head h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 600;
+  color: var(--pharma-text);
+}
+
+.json-editor-body {
+  padding: 1.25rem 1.5rem;
+}
+
+.monaco-editor {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid #e9ecef;
+}
+
+.json-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
 }
 
 .copy-btn {
-    background: var(--pharma-accent);
-    color: #fff;
-    border: none;
-    border-radius: var(--pharma-radius-sm);
-    padding: 0.6rem 1.25rem;
-    font-size: 0.95rem;
-    font-weight: 600;
-    cursor: pointer;
-    margin-top: 1.5rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    transition: var(--pharma-transition);
+  background: linear-gradient(135deg, var(--pharma-accent), var(--pharma-accent-light));
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: var(--pharma-transition);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
 }
 
 .copy-btn:hover {
-    background: #059669;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
+  background: linear-gradient(135deg, var(--pharma-success), var(--pharma-accent));
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.25);
 }
 
-/* Monaco Editor Styles */
-.monaco-editor {
-    border-radius: var(--pharma-radius-sm);
-    overflow: hidden;
+/* Action Buttons */
+.action-buttons-section {
+  background: var(--pharma-card);
+  border: 1px solid var(--pharma-border);
+  border-radius: var(--pharma-radius);
+  box-shadow: var(--pharma-shadow);
+  padding: 2rem;
+  margin-top: 2rem;
 }
 
-.squiggly-error {
-    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 6 3' enable-background='new 0 0 6 3' height='3' width='6'%3E%3Cg fill='%23dc3545'%3E%3Cpolygon points='5.5,0 2.5,3 1.1,3 4.1,0'/%3E%3Cpolygon points='4,0 6,2 6,0.6 5.4,0'/%3E%3Cpolygon points='0,2 1,3 2.4,3 0,0.6'/%3E%3C/g%3E%3C/svg%3E") repeat-x bottom left;
-    padding-bottom: 2px;
+.action-buttons-grid {
+  display: flex;
+  gap: 1.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
-/* Responsive Adjustments */
-@media (max-width: 768px) {
-    .annotation-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .stats-grid {
-        grid-template-columns: 1fr 1fr;
-    }
+.action-btn {
+  padding: 0.8rem 1.5rem;
+  border-radius: 12px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--pharma-transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-decoration: none;
+  font-size: 0.95rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  min-width: 200px;
+  justify-content: center;
 }
 
-@media (max-width: 480px) {
-    .stats-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .json-container, .summary-container {
-        padding: 1.5rem;
-    }
+.action-btn.success {
+  background: linear-gradient(135deg, var(--pharma-success), var(--pharma-accent));
+  color: #fff;
 }
 
-/* Floating action button */
-.floating-action {
-    position: fixed;
-    bottom: 2rem;
-    right: 2rem;
-    z-index: 99;
+.action-btn.secondary {
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--pharma-text-soft);
+  border: 1px solid var(--pharma-border);
 }
 
-.floating-btn {
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--pharma-primary), var(--pharma-accent));
-    color: white;
-    border: none;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.3s ease;
+.action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  text-decoration: none;
 }
 
-.floating-btn:hover {
-    transform: translateY(-3px) scale(1.05);
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+.action-btn.success:hover {
+  color: #fff;
 }
 
-/* Alert Styles */
+.action-btn.secondary:hover {
+  color: var(--pharma-text);
+  background: #fff;
+}
+
+.btn-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.btn-main {
+  font-weight: 600;
+}
+
+.btn-sub {
+  font-size: 0.8rem;
+  opacity: 0.9;
+}
+
+/* Alert styles */
 .alert {
-    padding: 1rem;
-    border-radius: var(--pharma-radius-sm);
-    margin-bottom: 1rem;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.alert-warning {
-    background-color: #fffbeb;
-    border: 1px solid #fcd34d;
-    color: #92400e;
-}
-
-.alert-warning i {
-    color: #f59e0b;
+  padding: 1rem 1.5rem;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  margin: 1rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .alert-info {
-    background-color: #eff6ff;
-    border: 1px solid #93c5fd;
-    color: #1e40af;
+  background: rgba(14, 165, 233, 0.1);
+  border-color: rgba(14, 165, 233, 0.2);
+  color: var(--pharma-primary-dark);
 }
 
-.alert-info i {
-    color: #3b82f6;
+/* JSON Syntax Highlighting */
+.squiggly-error {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 6 3' enable-background='new 0 0 6 3' height='3' width='6'%3E%3Cg fill='%23dc3545'%3E%3Cpolygon points='5.5,0 2.5,3 1.1,3 4.1,0'/%3E%3Cpolygon points='4,0 6,2 6,0.6 5.4,0'/%3E%3Cpolygon points='0,2 1,3 2.4,3 0,0.6'/%3E%3C/g%3E%3C/svg%3E") repeat-x bottom left;
+  padding-bottom: 2px;
+}
+
+/* Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 900px) {
+  .main-content {
+    max-width: 99vw;
+    padding: 1rem;
+  }
+
+  .document-header,
+  .page-navigation,
+  .summary-head,
+  .summary-body,
+  .json-editor-head,
+  .json-editor-body,
+  .action-buttons-section {
+    padding: 1.1rem 0.8rem !important;
+  }
+
+  .action-buttons-grid {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .action-btn {
+    width: 100%;
+    max-width: 300px;
+  }
+}
+
+@media (max-width: 700px) {
+  .document-header,
+  .page-navigation {
+    flex-direction: column !important;
+    gap: 1rem !important;
+  }
+
+  .header-actions,
+  .page-controls,
+  .expert-controls {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .json-actions {
+    flex-direction: column;
+  }
+
+  .copy-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .action-buttons-grid {
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+  }
+
+  .action-btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 </style>
 
-<!-- Header -->
-<section class="annotation-header">
-  <div class="header-info">
-    <h2><i class="fas fa-code"></i> JSON Annotations Expert - Page {{ page.page_number }}</h2>
-    <div class="document-meta">
-      <span class="meta-item">
-        <i class="fas fa-file-alt"></i>
-        {{ document.title }}
-      </span>
-      <span class="meta-item">
-        <i class="fas fa-tags"></i>
-        {{ total_annotations }} annotation(s)
-      </span>
-      <span class="meta-item">
-        <i class="fas fa-calendar-alt"></i>
-        {% if page.annotations_summary_generated_at %}
-          {{ page.annotations_summary_generated_at|date:"d/m/Y H:i" }}
+<div class="main-content">
+  <section class="card">
+    <!-- Document Header -->
+    <div class="document-header">
+      <div class="header-info">
+        <h1><i class="fas fa-code"></i> JSON Page {{ current_page_num }} - {{ document.title }}</h1>
+        <div class="document-meta">
+          <span class="meta-item"><i class="fas fa-file-alt"></i> Validation et édition du JSON</span>
+          <span class="meta-item"><i class="fas fa-calendar"></i> Page {{ current_page_num }}</span>
+          <span class="meta-item"><i class="fas fa-cog"></i> Mode Expert</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <a href="{% url 'expert:review_document' document.id %}?page={{ current_page_num }}" class="btn-outline" title="Retour à la révision">
+          <i class="fas fa-arrow-left"></i> Retour
+        </a>
+      </div>
+    </div>
+
+    <!-- Page Navigation -->
+    <div class="page-navigation">
+      <div class="page-controls">
+        <div class="page-indicator-modern">
+          <i class="fas fa-file-code"></i>
+          JSON Page {{ current_page_num }}
+        </div>
+      </div>
+
+      <div class="expert-controls">
+        <span style="color: var(--pharma-text-soft); font-size: 0.9rem;">
+          <i class="fas fa-info-circle"></i> Validation et édition JSON
+        </span>
+      </div>
+    </div>
+
+    <!-- Page Summary Section -->
+    {% if annotations_summary %}
+    <div class="summary-card">
+      <div class="summary-head">
+        <h3>
+          <i class="fas fa-file-text"></i> Résumé des Annotations (Page {{ current_page_num }})
+        </h3>
+        <span class="badge-pill badge-ok">
+          <i class="fas fa-check-circle"></i> Disponible
+        </span>
+      </div>
+      <div class="summary-body">
+        <div class="summary-content">
+          {{ annotations_summary|linebreaks }}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- JSON Editor Section -->
+    {% if annotations_json %}
+    <div class="json-editor-card">
+      <div class="json-editor-head">
+        <h3>
+          <i class="fas fa-code"></i> JSON Structuré des Annotations
+        </h3>
+        <span class="badge-pill badge-ok">
+          <i class="fas fa-check-circle"></i> Chargé
+        </span>
+      </div>
+      <div class="json-editor-body">
+        <div id="monaco-editor" style="height: 600px;"></div>
+        <div class="json-actions">
+          <button class="copy-btn" onclick="copyJsonToClipboard(event)">
+            <i class="fas fa-copy"></i> Copier le JSON
+          </button>
+          <button class="copy-btn" onclick="downloadJson()">
+            <i class="fas fa-download"></i> Télécharger
+          </button>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="summary-card">
+      <div class="summary-head">
+        <h3>
+          <i class="fas fa-exclamation-triangle"></i> JSON Non Disponible
+        </h3>
+        <span class="badge-pill badge-warn">
+          <i class="fas fa-exclamation-triangle"></i> Manquant
+        </span>
+      </div>
+      <div class="summary-body">
+        <div class="alert alert-info">
+          <i class="fas fa-info-circle"></i>
+          Aucune donnée JSON disponible pour cette page.
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Action Buttons -->
+    <div class="action-buttons-section">
+      <div class="action-buttons-grid">
+        {# Bouton "Page suivante" si pas dernière page #}
+        {% if current_page_num < total_pages %}
+        <a href="{% url 'expert:review_document' document.id %}?page={{ current_page_num|add:'1' }}"
+           class="action-btn success">
+          <i class="fas fa-check-circle"></i>
+          <div class="btn-content">
+            <span class="btn-main">Valider JSON & Page Suivante</span>
+            <span class="btn-sub">Aller à la page {{ current_page_num|add:'1' }}</span>
+          </div>
+        </a>
         {% else %}
-          Pas encore généré
+        {# Dernière page : bouton qui envoie un POST vers validate_document #}
+        <button type="submit"
+                form="validateDocForm"
+                class="action-btn success"
+                onclick="alert('Le document a été envoyé au Dev Métier.');">
+          <i class="fas fa-file-check"></i>
+          <div class="btn-content">
+            <span class="btn-main">Valider JSON & Résumé Document Complet</span>
+            <span class="btn-sub">Marquer le document comme terminé</span>
+          </div>
+        </button>
         {% endif %}
-      </span>
+
+        <a href="{% url 'expert:review_document' document.id %}?page={{ current_page_num }}"
+           class="action-btn secondary">
+          <i class="fas fa-arrow-left"></i>
+          <div class="btn-content">
+            <span class="btn-main">Retour Page {{ current_page_num }}</span>
+            <span class="btn-sub">Continuer la révision</span>
+          </div>
+        </a>
+      </div>
     </div>
-  </div>
-
-  <div class="header-actions">
-    <a href="{% url 'expert:review_document' document.id %}" class="btn-action">
-      <i class="fas fa-arrow-left"></i> Retour à l'annotation
-    </a>
-  </div>
-</section>
-
-<!-- Statistiques -->
-<div class="stats-grid">
-  <div class="stat-card">
-    <span class="stat-value">{{ total_annotations }}</span>
-    <span class="stat-label">Total Annotations</span>
-  </div>
-  <div class="stat-card">
-    <span class="stat-value">{{ page.page_number }}</span>
-    <span class="stat-label">Numéro de Page</span>
-  </div>
-  <div class="stat-card">
-    <span class="stat-value">
-      {% if annotations_json.annotations %}
-        {{ annotations_json.annotations|length }}
-      {% else %}
-        0
-      {% endif %}
-    </span>
-    <span class="stat-label">Dans le JSON</span>
-  </div>
+  </section>
 </div>
 
-<!-- Résumé en langage naturel -->
-{% if annotations_summary %}
-<section class="summary-container">
-  <h3><i class="fas fa-file-text"></i> Résumé des Annotations (Expert)</h3>
-  <div class="summary-text">
-    <div class="alert alert-info" style="margin-bottom: 1.5rem;">
-      <i class="fas fa-info-circle"></i> Ce résumé a été généré automatiquement à partir des annotations validées par l'expert.
-    </div>
-    {{ annotations_summary|linebreaks }}
-  </div>
-</section>
-{% endif %}
-
-<!-- JSON structuré -->
-<section class="json-container">
-  <h3><i class="fas fa-code"></i> JSON Structuré des Annotations (Expert)</h3>
-  {% if annotations_json %}
-  <div class="alert alert-info" style="margin-bottom: 1.5rem;">
-    <i class="fas fa-info-circle"></i> Ce JSON contient toutes les annotations validées par l'expert pour cette page, avec leurs métadonnées complètes.
-  </div>
-
-  <div id="monaco-editor" style="height: 600px; border: 2px solid #e9ecef; border-radius: 8px;"></div>
-
-  <div id="save-status" class="alert alert-success" style="display: none; margin-top: 1rem;">
-    <i class="fas fa-check-circle"></i>
-    <span></span>
-  </div>
-
-  <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-    <button class="copy-btn" onclick="copyJsonToClipboard()">
-      <i class="fas fa-copy"></i> Copier le JSON
-    </button>
-    <button class="copy-btn" onclick="saveJsonChanges()" style="background: #22c55e;">
-      <i class="fas fa-save"></i> Sauvegarder
-    </button>
-    <a href="{% url 'expert:generate_page_annotation_summary' page.id %}" class="copy-btn" onclick="regenerateSummary(event)" style="background: #f59e0b;">
-      <i class="fas fa-sync-alt"></i> Régénérer
-    </a>
-  </div>
-  {% else %}
-  <div class="alert alert-warning">
-    <i class="fas fa-exclamation-triangle"></i>
-    Aucun JSON généré pour cette page. 
-    <a href="{% url 'expert:generate_page_annotation_summary' page.id %}" onclick="generateSummary(event)" style="color: #92400e; text-decoration: underline;">
-      Cliquez ici pour le générer
-    </a>
-  </div>
-  {% endif %}
-</section>
-
-<!-- Actions rapides -->
-<section class="json-container">
-  <h3><i class="fas fa-bolt"></i> Actions Rapides Expert</h3>
-  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
-    <a href="{% url 'expert:review_document' document.id %}" class="btn-action">
-      <i class="fas fa-highlighter"></i> Continuer l'annotation
-    </a>
-    <a href="{% url 'expert:view_document_annotation_json' document.id %}" class="btn-action">
-      <i class="fas fa-file-code"></i> JSON du document complet
-    </a>
-    <a href="{% url 'expert:annotation_dashboard' %}" class="btn-action">
-      <i class="fas fa-tachometer-alt"></i> Dashboard Expert
-    </a>
-  </div>
-</section>
-
-<!-- Floating action button -->
-<div class="floating-action">
-  <button class="floating-btn" onclick="scrollToTop()" title="Retour en haut">
-    <i class="fas fa-arrow-up"></i>
-  </button>
-</div>
+{# Formulaire autonome NON imbriqué, cible du bouton via form="validateDocForm" #}
+<form id="validateDocForm" method="post" action="{% url 'expert:validate_document' document.id %}" style="display:none;">
+  {% csrf_token %}
+</form>
 
 <script>
 let editor = null;
 
-// Configuration et initialisation du Monaco Editor
+// Config Monaco comme la vue globale
 require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.39.0/min/vs' }});
 
-// Initialisation du Monaco Editor
 require(['vs/editor/editor.main'], function() {
-    // Créer l'éditeur
-    editor = monaco.editor.create(document.getElementById('monaco-editor'), {
-        value: JSON.stringify({{ annotations_json|safe }}, null, 2),
-        language: 'json',
-        theme: 'vs',
-        automaticLayout: true,
-        minimap: { enabled: false },
-        scrollBeyondLastLine: false,
-        fontSize: 14,
-        lineNumbers: 'on',
-        renderLineHighlight: 'all',
-        roundedSelection: false,
-        selectOnLineNumbers: true,
-        formatOnPaste: true,
-        formatOnType: true,
-        autoClosingBrackets: "always",
-        autoClosingQuotes: "always",
-        folding: true,
-        foldingStrategy: "indentation",
-        wordWrap: "on",
-        wrappingStrategy: "advanced",
-        snippetSuggestions: "none",
-        contextmenu: false,
-        renderValidationDecorations: "on",
-        hover: {
-            enabled: true,
-            delay: 300
+    try {
+        const jsonDataElement = document.getElementById('json-data');
+        let jsonData = {};
+        if (jsonDataElement && jsonDataElement.textContent.trim()) {
+            try { jsonData = JSON.parse(jsonDataElement.textContent); } catch(e) { jsonData = {}; }
         }
-    });
+        editor = monaco.editor.create(document.getElementById('monaco-editor'), {
+            value: JSON.stringify(jsonData, null, 2),
+            language: 'json',
+            theme: 'vs',
+            automaticLayout: true,
+            minimap: { enabled: true },
+            scrollBeyondLastLine: false,
+            fontSize: 14,
+            lineNumbers: 'on',
+            renderLineHighlight: 'all',
+            roundedSelection: false,
+            selectOnLineNumbers: true,
+            formatOnPaste: true,
+            formatOnType: true
+        });
 
-    // Ajouter la validation automatique du JSON
-    let decorations = [];
-    editor.onDidChangeModelContent(() => {
-        const model = editor.getModel();
-        try {
-            const content = model.getValue();
-            JSON.parse(content);
-            // Si le JSON est valide, effacer les décorations d'erreur
-            decorations = editor.deltaDecorations(decorations, []);
-        } catch (e) {
-            // Si le JSON est invalide, ajouter une décoration d'erreur
-            const match = e.message.match(/at position (\d+)/);
-            if (match) {
-                const pos = parseInt(match[1]);
-                const position = model.getPositionAt(pos);
-                decorations = editor.deltaDecorations(decorations, [{
-                    range: new monaco.Range(
-                        position.lineNumber,
-                        position.column,
-                        position.lineNumber,
-                        position.column + 1
-                    ),
-                    options: {
-                        inlineClassName: 'squiggly-error',
-                        hoverMessage: { value: e.message }
-                    }
-                }]);
+        let decorations = [];
+        editor.onDidChangeModelContent(() => {
+            const model = editor.getModel();
+            try {
+                JSON.parse(model.getValue());
+                decorations = editor.deltaDecorations(decorations, []);
+            } catch (e) {
+                const match = e.message.match(/at position (\d+)/);
+                if (match) {
+                    const pos = parseInt(match[1]);
+                    const position = model.getPositionAt(pos);
+                    decorations = editor.deltaDecorations(decorations, [{
+                        range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column + 1),
+                        options: { inlineClassName: 'squiggly-error', hoverMessage: { value: e.message } }
+                    }]);
+                }
             }
-        }
-    });
+        });
+    } catch (error) {
+        console.error('Erreur Monaco:', error);
+        document.getElementById('monaco-editor').innerHTML = '<div class="alert alert-info"><i class="fas fa-exclamation-circle"></i> Erreur lors du chargement de l\'éditeur JSON.</div>';
+    }
 });
 
-// Copier le JSON dans le presse-papiers
-function copyJsonToClipboard() {
+function copyJsonToClipboard(evt) {
+    if (!editor) return alert('Éditeur non initialisé');
     const jsonContent = editor.getValue();
-    
     navigator.clipboard.writeText(jsonContent).then(function() {
-        // Feedback visuel
-        const btn = event.target.closest('.copy-btn');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-check"></i> Copié !';
-        btn.style.background = '#22c55e';
-        
-        setTimeout(() => {
-            btn.innerHTML = originalText;
-            btn.style.background = '#10b981';
-        }, 2000);
+        const btn = evt?.target?.closest('.copy-btn');
+        if (btn) {
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check"></i> Copié !';
+            btn.style.background = 'linear-gradient(135deg, #22c55e, #34d399)';
+            setTimeout(() => { 
+                btn.innerHTML = originalText; 
+                btn.style.background = 'linear-gradient(135deg, var(--pharma-accent), var(--pharma-accent-light))'; 
+            }, 2000);
+        }
+        showSuccessNotification('JSON copié dans le presse-papiers !');
     }).catch(function(err) {
-        console.error('Erreur lors de la copie: ', err);
+        console.error('Erreur lors de la copie:', err);
         alert('Erreur lors de la copie dans le presse-papiers');
     });
 }
 
-// Sauvegarder les modifications du JSON
-async function saveJsonChanges() {
-    try {
-        const jsonContent = editor.getValue();
-        
-        // Valider que le JSON est bien formaté
-        JSON.parse(jsonContent);
-
-        // Envoyer le JSON au serveur
-        const response = await fetch(`/expert/annotation/page/{{ page.id }}/save-json/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify({
-                json_content: jsonContent
-            })
-        });
-
-        if (response.ok) {
-            showSaveStatus('✅ JSON sauvegardé avec succès !', 'success');
-        } else {
-            const error = await response.json();
-            throw new Error(error.message || 'Erreur lors de la sauvegarde');
-        }
-    } catch (error) {
-        showSaveStatus('❌ ' + error.message, 'error');
-    }
+function downloadJson() {
+    if (!editor) return alert('Éditeur non initialisé');
+    const jsonContent = editor.getValue();
+    const blob = new Blob([jsonContent], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `{{ document.title|slugify }}_page_{{ current_page_num }}_annotations.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showSuccessNotification('JSON téléchargé avec succès !');
 }
 
-// Afficher le statut de la sauvegarde
-function showSaveStatus(message, type) {
-    const statusDiv = document.getElementById('save-status');
-    statusDiv.className = 'alert alert-' + (type === 'success' ? 'success' : 'danger');
-    statusDiv.querySelector('span').textContent = message;
-    statusDiv.style.display = 'flex';
-    
-    setTimeout(() => {
-        statusDiv.style.display = 'none';
-    }, 3000);
-}
-
-// Générer le résumé
-function generateSummary(event) {
-    event.preventDefault();
-    const btn = event.target.closest('a');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Génération...';
-    
-    fetch(btn.href, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value || getCookie('csrftoken')
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('Résumé et JSON générés avec succès!');
-            location.reload();
-        } else {
-            alert('Erreur: ' + data.error);
-        }
-    })
-    .catch(error => {
-        console.error('Erreur:', error);
-        alert('Erreur lors de la génération');
-    })
-    .finally(() => {
-        btn.innerHTML = originalText;
-    });
-}
-
-// Régénérer le résumé
-function regenerateSummary(event) {
-    event.preventDefault();
-    if (!confirm('Êtes-vous sûr de vouloir régénérer le résumé et le JSON? Cela remplacera les données existantes.')) {
-        return;
-    }
-    generateSummary(event);
-}
-
-// Retour en haut
-function scrollToTop() {
-    window.scrollTo({
-        top: 0,
-        behavior: 'smooth'
-    });
-}
-
-// Fonction utilitaire pour récupérer le token CSRF
-function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-            const cookie = cookies[i].trim();
-            if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
-            }
-        }
-    }
-    return cookieValue;
-}
-
-// Formatage JSON avancé avec coloration syntaxique améliorée
-function formatJsonAdvanced(jsonElement) {
-    if (!jsonElement || !jsonElement.textContent) return;
-    
-    try {
-        const jsonContent = jsonElement.textContent.trim();
-        const parsedJson = JSON.parse(jsonContent);
-
-        // Format avec indentation de 2 espaces
-        const formattedJson = JSON.stringify(parsedJson, null, 2);
-
-        // Coloration syntaxique avancée
-        let highlightedJson = formattedJson
-            // Clés d'objet (propriétés)
-            .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*")(\s*:)/g, '<span class="json-key">$1</span>$3')
-            // Chaînes de caractères
-            .replace(/:\s*("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*")/g, ': <span class="json-string">$1</span>')
-            // Nombres (entiers et décimaux)
-            .replace(/:\s*(-?\d+\.?\d*)/g, ': <span class="json-number">$1</span>')
-            // Booléens
-            .replace(/:\s*(true|false)/g, ': <span class="json-boolean">$1</span>')
-            // Null
-            .replace(/:\s*(null)/g, ': <span class="json-null">$1</span>')
-            // Crochets et accolades
-            .replace(/([{}[\]])/g, '<span class="json-bracket">$1</span>')
-            // Virgules
-            .replace(/(,)$/gm, '<span class="json-comma">$1</span>');
-
-        jsonElement.innerHTML = highlightedJson;
-        
-        // Ajouter des numéros de ligne
-        addLineNumbers(jsonElement);
-        
-    } catch (e) {
-        console.log('JSON invalide ou déjà formaté:', e);
-        // En cas d'erreur, on laisse le contenu tel quel
-    }
-}
-
-// Ajouter des numéros de ligne au JSON
-function addLineNumbers(jsonElement) {
-    const lines = jsonElement.innerHTML.split('\n');
-    const numberedLines = lines.map((line, index) => {
-        const lineNumber = (index + 1).toString().padStart(3, ' ');
-        return `<span class="line-number">${lineNumber}</span><span class="line-content">${line}</span>`;
-    }).join('\n');
-    
-    jsonElement.innerHTML = numberedLines;
-    jsonElement.classList.add('json-with-lines');
-}
-
-// Initialisation au chargement de la page
+// Add JavaScript to handle modern interactions
 document.addEventListener('DOMContentLoaded', function() {
-    const jsonDisplay = document.getElementById('json-display');
-    if (jsonDisplay) {
-        // Le JSON est déjà formaté par le filtre Django, on applique juste la coloration syntaxique
-        applySyntaxHighlighting(jsonDisplay);
-    }
+  // Add modern hover effects
+  document.querySelectorAll('.action-btn').forEach(btn => {
+    btn.addEventListener('mouseenter', function() {
+      this.style.transform = 'translateY(-4px)';
+    });
+    
+    btn.addEventListener('mouseleave', function() {
+      this.style.transform = 'translateY(-2px)';
+    });
+  });
+
+  // Add ripple effect to buttons
+  document.querySelectorAll('.nav-btn, .action-btn, .copy-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      const ripple = document.createElement('span');
+      const rect = this.getBoundingClientRect();
+      const size = Math.max(rect.width, rect.height);
+      ripple.style.cssText = `
+        position: absolute;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.3);
+        transform: scale(0);
+        animation: ripple 0.6s linear;
+        width: ${size}px;
+        height: ${size}px;
+        left: ${e.clientX - rect.left - size/2}px;
+        top: ${e.clientY - rect.top - size/2}px;
+      `;
+      
+      if (!document.querySelector('#ripple-styles')) {
+        const style = document.createElement('style');
+        style.id = 'ripple-styles';
+        style.textContent = `
+          @keyframes ripple {
+            0% { transform: scale(0); opacity: 1; }
+            100% { transform: scale(4); opacity: 0; }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+      
+      this.style.position = 'relative';
+      this.style.overflow = 'hidden';
+      this.appendChild(ripple);
+      
+      setTimeout(() => ripple.remove(), 600);
+    });
+  });
 });
 
-// Apply syntax highlighting to already formatted JSON
-function applySyntaxHighlighting(jsonElement) {
-    if (!jsonElement || !jsonElement.textContent) return;
-    
-    try {
-        const jsonContent = jsonElement.textContent.trim();
-        
-        // Coloration syntaxique avancée
-        let highlightedJson = jsonContent
-            // Clés d'objet (propriétés)
-            .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*")(\s*:)/g, '<span class="json-key">$1</span>$3')
-            // Chaînes de caractères
-            .replace(/:\s*("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*")/g, ': <span class="json-string">$1</span>')
-            // Nombres (entiers et décimaux)
-            .replace(/:\s*(-?\d+\.?\d*)/g, ': <span class="json-number">$1</span>')
-            // Booléens
-            .replace(/:\s*(true|false)/g, ': <span class="json-boolean">$1</span>')
-            // Null
-            .replace(/:\s*(null)/g, ': <span class="json-null">$1</span>')
-            // Crochets et accolades
-            .replace(/([{}[\]])/g, '<span class="json-bracket">$1</span>')
-            // Virgules
-            .replace(/(,)$/gm, '<span class="json-comma">$1</span>');
+/* Notification System */
+function showSuccessNotification(message) {
+  const notification = document.createElement('div');
+  notification.className = 'expert-notification success';
+  notification.innerHTML = `
+    <div class="notification-content">
+      <i class="fas fa-check-circle"></i>
+      <span>${message}</span>
+    </div>
+  `;
 
-        jsonElement.innerHTML = highlightedJson;
-        
-        // Ajouter des numéros de ligne
-        addLineNumbers(jsonElement);
-        
-    } catch (e) {
-        console.log('Erreur lors de l\'application de la coloration syntaxique:', e);
-        // En cas d'erreur, on laisse le contenu tel quel
-    }
+  if (!document.querySelector('#expert-notification-styles')) {
+    const style = document.createElement('style');
+    style.id = 'expert-notification-styles';
+    style.textContent = `
+      .expert-notification {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 10000;
+        padding: 1rem 1.5rem;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0,0,0,.15);
+        backdrop-filter: blur(10px);
+        animation: slideInRight .3s ease-out;
+        max-width: 400px;
+        font-family: Inter, sans-serif;
+      }
+      .expert-notification.success {
+        background: linear-gradient(135deg, rgba(16,185,129,.9), rgba(34,197,94,.9));
+        border: 1px solid rgba(16,185,129,.3);
+        color: #fff;
+      }
+      .expert-notification.error {
+        background: linear-gradient(135deg, rgba(239,68,68,.9), rgba(220,38,38,.9));
+        border: 1px solid rgba(239,68,68,.3);
+        color: #fff;
+      }
+      .notification-content {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        font-weight: 500;
+        font-size: .9rem;
+      }
+      .notification-content i {
+        font-size: 1.1rem;
+        flex-shrink: 0;
+      }
+      @keyframes slideInRight {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      @keyframes slideOutRight {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  document.body.appendChild(notification);
+
+  setTimeout(() => {
+    notification.style.animation = 'slideOutRight .3s ease-in';
+    setTimeout(() => notification.remove(), 300);
+  }, 4000);
 }
 </script>
 

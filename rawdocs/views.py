@@ -24,7 +24,10 @@ from django.contrib.auth import views as auth_views
 from django.http import HttpResponse
 from django.views.decorators.http import require_POST
 from .metadata_rlhf_learning import MetadataRLHFLearner
-
+from datetime import timezone as dt_timezone
+from django.conf import settings
+from pymongo import MongoClient
+from django.utils import timezone
 
 
 from .models import (
@@ -38,6 +41,17 @@ from .utils import extract_metadonnees, extract_full_text
 from .annotation_utils import extract_pages_from_pdf
 from .rlhf_learning import RLHFGroqAnnotator
 from .table_image_extractor import TableImageExtractor
+
+
+# --- Mongo client (réutilisé) ---
+try:
+    _mongo_client = MongoClient(settings.MONGO_URI, serverSelectionTimeoutMS=5000)
+    _mongo_coll   = _mongo_client[settings.MONGO_DB][settings.MONGO_COLLECTION]
+    print("✅ Mongo prêt :", settings.MONGO_URI, settings.MONGO_DB, settings.MONGO_COLLECTION)
+except Exception as e:
+    _mongo_client = None
+    _mongo_coll   = None
+    print("⚠️ Mongo init KO:", e)
 
 
 # ——— Forms ——————————————————————————————————————————
@@ -166,34 +180,23 @@ def register(request):
 @user_passes_test(is_metadonneur)
 def dashboard_view(request):
     docs = RawDocument.objects.filter(owner=request.user).order_by('-created_at')
-
-    # Définir total_planned par défaut si pas encore défini
-    total_planned = request.session.get('total_planned', 0)
-
-    # Si formulaire POST pour mettre à jour total_planned
-    if request.method == 'POST':
-        new_planned = request.POST.get('planned_number')
-        if new_planned and new_planned.isdigit():
-            total_planned = int(new_planned)
-            request.session['total_planned'] = total_planned
-
-    # KPI calculés
-    total_scrapped = docs.count()
-    total_completed = docs.filter(is_validated=True).count()
+    # KPI calculés pour métadonneur (plus réalistes)
+    total_imported = docs.count()
+    validated_count = docs.filter(is_validated=True).count()
     pending_validation_count = docs.filter(is_validated=False).count()
 
     context = {
         'documents': docs,
-        'total_scrapped': total_scrapped,
-        'total_planned': total_planned,
-        'total_completed': total_completed,
+        'total_scrapped': total_imported,
+        'total_planned': 150,  # Valeur fixe plus cohérente
+        'total_completed': validated_count,
+        'in_progress': pending_validation_count,
         'pending_validation_count': pending_validation_count,
-        'bar_data': json.dumps([total_planned, total_scrapped, total_completed, pending_validation_count]),
-        'pie_data': json.dumps([
-            total_planned,  # Planifiés
-            total_completed,  # Validés
-            pending_validation_count  # En attente
-        ]),
+        'total_imported': total_imported,
+        'total_in_reextraction': total_imported,
+        # Placeholder charts
+        'pie_data': json.dumps([15, 8, 12, 5, 3]),
+        'bar_data': json.dumps([150, total_imported, validated_count, pending_validation_count]),
     }
     return render(request, 'rawdocs/dashboard.html', context)
 
@@ -324,7 +327,7 @@ def upload_pdf(request):
                 rd.file.save(os.path.join(ts, fn), ContentFile(resp.content))
 
             rd.save()
-            metadata = extract_metadonnees(rd.file.path, rd.url or "")
+            metadata = extract_metadonnees(rd.file.path, rd.url or "") or {}
             text = extract_full_text(rd.file.path)
             
             # Save extracted metadata to the model
@@ -657,11 +660,30 @@ def annotate_document(request, doc_id):
     pnum = int(request.GET.get('page', 1))
     page_obj = get_object_or_404(DocumentPage, document=document, page_number=pnum)
 
+    # Build contextual annotation types (reduced/dynamic)
+    used_type_ids = Annotation.objects.filter(page__document=document).values_list('annotation_type_id', flat=True).distinct()
+    context_text = " ".join([document.context or '', document.doc_type or '', document.source or '']).lower()
+    whitelist = set()
+    if any(k in context_text for k in ['pharma','pharmacie','medicament','drug','clinical','trial','essai']):
+        whitelist.update([AnnotationType.REQUIRED_DOCUMENT, AnnotationType.AUTHORITY, AnnotationType.LEGAL_REFERENCE, AnnotationType.DELAY, AnnotationType.PROCEDURE_TYPE, AnnotationType.VARIATION_CODE, AnnotationType.REQUIRED_CONDITION, AnnotationType.FILE_TYPE])
+    elif any(k in context_text for k in ['regulatory','réglementaire','compliance']):
+        whitelist.update([AnnotationType.REQUIRED_DOCUMENT, AnnotationType.AUTHORITY, AnnotationType.LEGAL_REFERENCE, AnnotationType.DELAY, AnnotationType.PROCEDURE_TYPE])
+    elif any(k in context_text for k in ['ema','europe','eu']):
+        whitelist.update([AnnotationType.AUTHORITY, AnnotationType.LEGAL_REFERENCE, AnnotationType.DELAY, AnnotationType.PROCEDURE_TYPE, AnnotationType.REQUIRED_DOCUMENT])
+    elif any(k in context_text for k in ['fda','usa','united states']):
+        whitelist.update([AnnotationType.AUTHORITY, AnnotationType.LEGAL_REFERENCE, AnnotationType.DELAY, AnnotationType.REQUIRED_DOCUMENT])
+    else:
+        whitelist.update([AnnotationType.REQUIRED_DOCUMENT, AnnotationType.AUTHORITY, AnnotationType.LEGAL_REFERENCE, AnnotationType.DELAY, AnnotationType.PROCEDURE_TYPE])
+
+    base_qs = AnnotationType.objects.filter(name__in=list(whitelist))
+    used_qs = AnnotationType.objects.filter(id__in=used_type_ids)
+    annotation_types = (base_qs | used_qs).distinct().order_by('display_name')
+
     return render(request, 'rawdocs/annotate_document.html', {
         'document': document,
         'pages': pages,
         'current_page': page_obj,
-        'annotation_types': AnnotationType.objects.all(),
+        'annotation_types': annotation_types,
         'existing_annotations': page_obj.annotations.all().order_by('start_pos'),
         'total_pages': document.total_pages
     })
@@ -698,43 +720,85 @@ def save_manual_annotation(request):
             'error': str(e),
             'message': 'Erreur lors de la sauvegarde'
         }, status=500)
+    
 
-
-@login_required(login_url='rawdocs:login')
+@login_required
 def get_page_annotations(request, page_id):
-    page = get_object_or_404(DocumentPage, id=page_id)
-    anns = [{
-        'id': a.id,
-        'start_pos': a.start_pos,
-        'end_pos': a.end_pos,
-        'selected_text': a.selected_text,
-        'type': a.annotation_type.name,
-        'type_display': a.annotation_type.display_name,
-        'color': a.annotation_type.color,
-        'confidence': a.confidence_score,
-        'reasoning': a.ai_reasoning,
-        'is_validated': a.is_validated,
-    } for a in page.annotations.all().order_by('start_pos')]
+    try:
+        page = get_object_or_404(DocumentPage, id=page_id)
+        annotations = page.annotations.all().select_related('annotation_type').order_by('start_pos')
+        
+        anns = []
+        for a in annotations:
+            anns.append({
+                'id': a.id,
+                'start_pos': a.start_pos,
+                'end_pos': a.end_pos,
+                'selected_text': a.selected_text,
+                'type': a.annotation_type.name,
+                'type_display': a.annotation_type.display_name,
+                'color': a.annotation_type.color,
+                'confidence': a.confidence_score,
+                'reasoning': a.ai_reasoning,
+                'is_validated': getattr(a, 'is_validated', False),
+            })
 
-    return JsonResponse({
-        'annotations': anns,
-        'page_text': page.cleaned_text
-    })
+        return JsonResponse({
+            'success': True,
+            'annotations': anns,
+            'page_text': page.cleaned_text,
+            'total_annotations': len(anns)
+        })
+        
+    except Exception as e:
+        print(f"Error loading annotations: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'annotations': [],
+            'page_text': '',
+            'total_annotations': 0
+        })
+    
 
-
-@login_required(login_url='rawdocs:login')
-@user_passes_test(is_annotateur)
+@login_required
+@csrf_exempt  
 def delete_annotation(request, annotation_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
 
-    ann = get_object_or_404(Annotation, id=annotation_id)
-    if ann.created_by != request.user and not request.user.groups.filter(name="Expert").exists():
-        return JsonResponse({'error': 'Permission denied'}, status=403)
+    try:
+        ann = get_object_or_404(Annotation, id=annotation_id)
+        
+        # Check permissions
+        if ann.created_by != request.user and not request.user.groups.filter(name="Expert").exists():
+            return JsonResponse({'error': 'Permission denied'}, status=403)
 
-    ann.delete()
-    return JsonResponse({'success': True})
+        # Store page reference before deletion
+        page = ann.page
+        
+        # Delete the annotation
+        ann.delete()
+        
+        # Check if page still has annotations
+        remaining_annotations = page.annotations.count()
+        if remaining_annotations == 0:
+            page.is_annotated = False
+            page.save()
 
+        return JsonResponse({
+            'success': True,
+            'message': 'Annotation supprimée',
+            'remaining_annotations': remaining_annotations
+        })
+        
+    except Exception as e:
+        print(f"Error deleting annotation: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+    
 
 @login_required
 @csrf_exempt
@@ -790,6 +854,18 @@ def validate_page_annotations(request, page_id):
         # Clear session
         if ai_session_key in request.session:
             del request.session[ai_session_key]
+
+        # If all pages of the document are validated by human, auto-submit for expert review
+        doc = page.document
+        try:
+            total = doc.total_pages or doc.pages.count()
+            validated = doc.pages.filter(is_validated_by_human=True).count()
+            if total > 0 and validated >= total and not doc.is_ready_for_expert:
+                doc.is_ready_for_expert = True
+                doc.expert_ready_at = datetime.now()
+                doc.save(update_fields=['is_ready_for_expert', 'expert_ready_at'])
+        except Exception:
+            pass
 
         return JsonResponse({
             'success': True,
@@ -1601,11 +1677,30 @@ def annotate_document(request, doc_id):
     except DocumentRegulatoryAnalysis.DoesNotExist:
         global_analysis = None
 
+    # Build reduced, default annotation types + include types already used in this document
+    used_type_ids = Annotation.objects.filter(page__document=document).values_list('annotation_type_id', flat=True).distinct()
+
+    # Default whitelist (keywords-independent)
+    whitelist = {
+        AnnotationType.REQUIRED_DOCUMENT,
+        AnnotationType.AUTHORITY,
+        AnnotationType.LEGAL_REFERENCE,
+        AnnotationType.DELAY,
+        AnnotationType.PROCEDURE_TYPE,
+        AnnotationType.VARIATION_CODE,
+        AnnotationType.REQUIRED_CONDITION,
+        AnnotationType.FILE_TYPE,
+    }
+
+    base_qs = AnnotationType.objects.filter(name__in=list(whitelist))
+    used_qs = AnnotationType.objects.filter(id__in=used_type_ids)
+    annotation_types = (base_qs | used_qs).distinct().order_by('display_name')
+
     return render(request, 'rawdocs/annotate_document.html', {
         'document': document,
         'pages': pages,
         'current_page': page_obj,
-        'annotation_types': AnnotationType.objects.all(),
+        'annotation_types': annotation_types,
         'existing_annotations': page_obj.annotations.all().order_by('start_pos'),
         'total_pages': document.total_pages,
         # Nouvelles données pour l'analyse réglementaire
@@ -2119,32 +2214,111 @@ def view_page_annotation_json(request, page_id):
     except Exception as e:
         messages.error(request, f"Erreur: {str(e)}")
         return redirect('rawdocs:annotation_dashboard')
+    
+
+@login_required
+@user_passes_test(is_dev_metier)
+@csrf_exempt
+def dev_metier_generate_page_annotation_summary(request, page_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    try:
+        page = get_object_or_404(DocumentPage, id=page_id)
+
+        # Récupérer les annotations de la page
+        annotations = page.annotations.all().select_related('annotation_type').order_by('start_pos')
+
+        # Construire entities -> [valeurs]
+        entities = _build_entities_map(annotations, use_display_name=True)
+
+        # JSON minimaliste de la page
+        page_json = {
+            'document': {
+                'id': str(page.document.id),
+                'title': page.document.title,
+                'doc_type': getattr(page.document, 'doc_type', None),
+                'source': getattr(page.document, 'source', None),
+            },
+            'page': {
+                'number': page.page_number,
+                'annotations_count': annotations.count(),
+            },
+            'entities': entities,
+            'generated_at': datetime.utcnow().isoformat() + 'Z',
+        }
+
+        # Résumé basé sur les entités de la page
+        summary = generate_entities_based_page_summary(
+            entities=entities,
+            page_number=page.page_number,
+            document_title=page.document.title
+        )
+
+        # Sauvegarde avec timestamp
+        page.annotations_json = page_json
+        page.annotations_summary = summary
+        page.annotations_summary_generated_at = timezone.now()  # ⭐ NOUVEAU
+        page.save(update_fields=['annotations_json', 'annotations_summary', 'annotations_summary_generated_at'])
+
+        return JsonResponse({'success': True, 'page_json': page_json, 'summary': summary})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
 
 
 @login_required(login_url='rawdocs:login')
 @user_passes_test(is_dev_metier, login_url='rawdocs:login')
 def dev_metier_document_annotation_json(request, doc_id):
-    """
-    Vue spéciale dev-métier : affiche le JSON d'un document validé par expert
-    """
     document = get_object_or_404(RawDocument, id=doc_id, is_expert_validated=True)
 
-    # Si pas encore généré, déclencher la génération
+    # Générer le JSON global si absent avec gestion d'erreur
     if not document.global_annotations_json:
-        from django.test import RequestFactory
-        factory = RequestFactory()
-        fake_request = factory.post(f'/generate-document-annotation-summary/{doc_id}/')
-        fake_request.user = request.user
-        generate_document_annotation_summary(fake_request, doc_id)
-        document.refresh_from_db()
+        try:
+            from django.test import RequestFactory
+            fake = RequestFactory().post(f'/expert/annotation/document/{doc_id}/generate-summary/')
+            fake.user = request.user
+            # Appel à la fonction de génération (à adapter selon votre structure)
+            generate_document_annotation_summary(fake, doc_id)
+            document.refresh_from_db()
+        except Exception as e:
+            messages.warning(request, f"Génération globale non effectuée : {e}")
+
+    # Gestion de la page sélectionnée avec meilleure gestion d'erreur
+    selected_page_number = request.GET.get('page') or None
+    page_json = None
+    page_summary = None
+
+    if selected_page_number:
+        try:
+            page_num = int(selected_page_number)
+            page = DocumentPage.objects.get(document=document, page_number=page_num)
+
+            # Générer le JSON de la page si absent
+            if not page.annotations_json:
+                from django.test import RequestFactory
+                fake = RequestFactory().post(f'/dev-metier/annotation/page/{page.id}/generate-summary/')
+                fake.user = request.user
+                dev_metier_generate_page_annotation_summary(fake, page.id)  # ⭐ NOUVEAU
+                page.refresh_from_db()
+
+            page_json = page.annotations_json or {}
+            page_summary = page.annotations_summary or ""
+        except (ValueError, DocumentPage.DoesNotExist):
+            messages.error(request, f"Page {selected_page_number} introuvable pour ce document.")
+
+    pages = document.pages.all().order_by('page_number')
 
     context = {
-        "document": document,
-        "global_annotations_json": document.global_annotations_json,
-        "global_annotations_summary": document.global_annotations_summary,
-        "total_annotations": sum(p.annotations.count() for p in document.pages.all()),
-        "annotated_pages": document.pages.filter(annotations__isnull=False).distinct().count(),
-        "total_pages": document.total_pages,
+        'document': document,
+        'global_annotations_json': document.global_annotations_json or {},
+        'global_annotations_summary': document.global_annotations_summary or "",
+        'page_json': page_json,
+        'page_summary': page_summary,
+        'pages': pages,
+        'selected_page_number': selected_page_number,
+        'total_annotations': sum(p.annotations.count() for p in document.pages.all()),
+        'annotated_pages': document.pages.filter(annotations__isnull=False).distinct().count(),
+        'total_pages': document.total_pages,
     }
     return render(request, 'rawdocs/view_document_annotation_json_devmetier.html', context)
 
@@ -2540,3 +2714,98 @@ def metadata_learning_api(request):
         })
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+    
+
+from django.views.decorators.http import require_http_methods
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+
+@require_http_methods(["POST"])
+def clear_page_annotations(request, page_id):
+    try:
+        page = get_object_or_404(DocumentPage, id=page_id)
+        page.annotations.all().delete()
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+@user_passes_test(is_dev_metier)
+@csrf_exempt
+def save_document_json_devmetier(request, doc_id):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Méthode non autorisée'}, status=405)
+
+    try:
+        # 1) Charger le doc validé (même logique qu’avant)
+        document = get_object_or_404(RawDocument, id=doc_id, is_validated=True)
+
+        # 2) Sécurité groupe
+        if not is_dev_metier(request.user):
+            return JsonResponse({'success': False, 'error': 'Permission refusée'}, status=403)
+
+        # 3) Parser JSON
+        data = json.loads(request.body)
+        json_content = data.get('json_content')
+        if json_content is None:
+            return JsonResponse({'success': False, 'error': 'Contenu JSON manquant'}, status=400)
+        try:
+            json.dumps(json_content)  # vérifie sérialisable
+        except (TypeError, ValueError):
+            return JsonResponse({'success': False, 'error': 'JSON invalide'}, status=400)
+
+        # 4) Historique (ancien JSON)
+        old_json = document.global_annotations_json or {}
+
+        # 5) Sauvegarde côté Django (SQLite) - complète (pas update_fields)
+        document.global_annotations_json = json_content
+        document.save()
+
+        # 6) Sauvegarde Mongo (UPsert par rawdoc_id)
+        mongo_write = {'matched': None, 'modified': None, 'upserted': None}
+        if _mongo_coll is not None:
+            payload = {
+                "rawdoc_id": int(doc_id),
+                "title": getattr(document, "title", None),
+                "file_name": getattr(document, "file_name", None),
+                "owner": getattr(getattr(document, "owner", None), "username", None),
+                "total_pages": getattr(document, "total_pages", None),
+                "global_annotations_json": json_content,
+                "updated_at": timezone.now(),
+                "updated_by": request.user.username,
+            }
+            res = _mongo_coll.update_one(
+                {"rawdoc_id": int(doc_id)},
+                {"$set": payload},
+                upsert=True,
+            )
+            mongo_write = {
+                'matched': res.matched_count,
+                'modified': res.modified_count,
+                'upserted': getattr(res, "upserted_id", None) is not None
+            }
+            print(f"✅ Mongo write d{doc_id}: matched={res.matched_count} modified={res.modified_count} upserted={getattr(res,'upserted_id',None)}")
+        else:
+            print("⚠️ Pas de connexion Mongo (_mongo_coll is None)")
+
+        # 7) Historique application
+        GlobalSummaryEditHistory.objects.create(
+            document=document,
+            old_summary=json.dumps(old_json),
+            new_summary=json.dumps(json_content),
+            modified_by=request.user,
+            reason='Modification JSON via éditeur Dev Métier'
+        )
+
+        return JsonResponse({
+            'success': True,
+            'message': 'JSON global sauvegardé dans MongoDB',
+            'mongo': mongo_write
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON invalide dans la requête'}, status=400)
+    except Exception as e:
+        print(f"❌ Erreur sauvegarde JSON document {doc_id}: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)

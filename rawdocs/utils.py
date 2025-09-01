@@ -212,9 +212,9 @@ def call_mistral_with_confidence(text_chunk, document_url="", filename=""):
 
         data = {
             "model": "mistral-large-latest",
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": [{"role": "user", "content": prompt + "\n\nReturn ONLY one JSON object or array. No markdown, no code fences, no explanations, no ellipses in values."}],
             "temperature": 0.1,
-            "max_tokens": 800
+            "max_tokens": 1200
         }
 
         response = requests.post(url, headers=headers, json=data, timeout=30)
@@ -224,16 +224,107 @@ def call_mistral_with_confidence(text_chunk, document_url="", filename=""):
             result = response.json()
             response_text = result['choices'][0]['message']['content']
 
-            # Find JSON in response
-            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-            if json_match:
-                json_str = json_match.group()
-                full_result = json.loads(json_str)
-                print("✅ Mistral extraction with confidence successful!")
-                return full_result
-            else:
-                print("❌ No JSON found in Mistral response")
+            # Try to robustly parse JSON from the response
+            def _sanitize_and_parse(candidate: str):
+                original = candidate
+                # Normalize smart quotes
+                candidate = candidate.replace('\u201c', '"').replace('\u201d', '"').replace('\u2019', "'")
+                # Remove trailing commas before } or ]
+                candidate = re.sub(r',\s*([}\]])', r'\1', candidate)
+                # Fix single-quoted keys: 'key': value -> "key": value
+                candidate = re.sub(r"(?<=\{|,)\s*'([A-Za-z0-9_]+)'\s*:\s*", r'"\1": ', candidate)
+                # Fix single-quoted string values: key: 'value' -> key: "value"
+                candidate = re.sub(r":\s*'([^'\\]*(?:\\.[^'\\]*)*)'", r': "\1"', candidate)
+                # Fix unquoted keys only when at object boundaries
+                candidate = re.sub(r'(?<=\{|,)\s*([A-Za-z0-9_]+)\s*:', r'"\1":', candidate)
+                try:
+                    return json.loads(candidate)
+                except Exception:
+                    return None
+
+            def _extract_balanced_block(text: str):
+                # Support either object {..} or array [..]
+                start_obj = text.find('{')
+                start_arr = text.find('[')
+                starts = [s for s in [start_obj, start_arr] if s != -1]
+                if not starts:
+                    return None
+                start = min(starts)
+                opener = text[start]
+                closer = '}' if opener == '{' else ']'
+                i = start
+                depth = 0
+                in_str = False
+                esc = False
+                while i < len(text):
+                    ch = text[i]
+                    if in_str:
+                        if esc:
+                            esc = False
+                        elif ch == '\\':
+                            esc = True
+                        elif ch == '"':
+                            in_str = False
+                    else:
+                        if ch == '"':
+                            in_str = True
+                        elif ch == opener:
+                            depth += 1
+                        elif ch == closer:
+                            depth -= 1
+                            if depth == 0:
+                                return text[start:i+1]
+                    i += 1
                 return None
+
+            def _try_parse_json(text: str):
+                # 1) Direct parse
+                try:
+                    return json.loads(text)
+                except Exception:
+                    pass
+                # 2) Fenced code block ```json ... ``` or ``` ... ``` (object or array)
+                m = re.search(r"```(?:json|JSON)?\s*([\[{][\s\S]*?[\]}])\s*```", text)
+                if m:
+                    fragment = m.group(1)
+                    try:
+                        return json.loads(fragment)
+                    except Exception:
+                        parsed = _sanitize_and_parse(fragment)
+                        if parsed is not None:
+                            return parsed
+                # 3) Balanced block extraction (object or array)
+                candidate = _extract_balanced_block(text)
+                if candidate:
+                    try:
+                        return json.loads(candidate)
+                    except Exception:
+                        parsed = _sanitize_and_parse(candidate)
+                        if parsed is not None:
+                            return parsed
+                return None
+
+            full_result = _try_parse_json(response_text)
+            if not full_result:
+                print("❌ No valid JSON found or parse failed")
+                return None
+
+            # Add quality metrics to metadata 
+            if 'metadata' in full_result and 'confidence_scores' in full_result:
+                confidence_scores = full_result.get('confidence_scores', {})
+                overall_quality = calculate_overall_quality(confidence_scores)
+                
+                full_result['metadata']['quality'] = {
+                    'extraction_rate': overall_quality,
+                    'field_scores': confidence_scores,
+                    'extraction_reasoning': full_result.get('extraction_reasoning', {}),
+                    'extracted_fields': len([v for v in full_result['metadata'].values() if v]),
+                    'total_fields': len(full_result['metadata']),
+                    'llm_powered': True
+                }
+            
+            print("✅ Mistral extraction with confidence successful!")
+            return full_result
         else:
             print(f"❌ Mistral API error: {response.status_code}")
             return None
@@ -323,24 +414,88 @@ def call_llm_with_learned_prompt(prompt):
         response = client.chat.completions.create(
             messages=[{
                 "role": "user", 
-                "content": prompt
+                "content": prompt + "\n\nReturn ONLY one JSON object or array. No markdown, no code fences, no explanations, no ellipses in values."
             }],
             model="llama3-8b-8192",
             temperature=0.1,
-            max_tokens=1000
+            max_tokens=1500
         )
         
         result = response.choices[0].message.content
-        
-        # Try to parse JSON
-        try:
-            return json.loads(result)
-        except:
-            # Fallback: extract JSON from text
-            json_match = re.search(r'\{.*\}', result, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group())
+
+        # Robust JSON parsing similar to Mistral path
+        def _sanitize_and_parse(candidate: str):
+            # Normalize smart quotes
+            candidate = candidate.replace('\u201c', '"').replace('\u201d', '"').replace('\u2019', "'")
+            # Remove trailing commas before } or ]
+            candidate = re.sub(r',\s*([}\]])', r'\1', candidate)
+            # Fix single-quoted keys: 'key': value -> "key": value
+            candidate = re.sub(r"(?<=\{|,)\s*'([A-Za-z0-9_]+)'\s*:\s*", r'"\1": ', candidate)
+            # Fix single-quoted string values: key: 'value' -> key: "value"
+            candidate = re.sub(r":\s*'([^'\\]*(?:\\.[^'\\]*)*)'", r': "\1"', candidate)
+            # Fix unquoted keys only when at object boundaries
+            candidate = re.sub(r'(?<=\{|,)\s*([A-Za-z0-9_]+)\s*:', r'"\1":', candidate)
+            try:
+                return json.loads(candidate)
+            except Exception:
+                return None
+
+        def _extract_balanced_json(text: str):
+            start = text.find('{')
+            if start == -1:
+                return None
+            i = start
+            depth = 0
+            in_str = False
+            esc = False
+            while i < len(text):
+                ch = text[i]
+                if in_str:
+                    if esc:
+                        esc = False
+                    elif ch == '\\':
+                        esc = True
+                    elif ch == '"':
+                        in_str = False
+                else:
+                    if ch == '"':
+                        in_str = True
+                    elif ch == '{':
+                        depth += 1
+                    elif ch == '}':
+                        depth -= 1
+                        if depth == 0:
+                            return text[start:i+1]
+                i += 1
+            return None
+
+        def _try_parse_json(text: str):
+            # 1) Direct parse
+            try:
+                return json.loads(text)
+            except Exception:
+                pass
+            # 2) Fenced code block ```json ... ``` or ``` ... ```
+            m = re.search(r"```(?:json|JSON)?\s*(\{[\s\S]*?\})\s*```", text)
+            if m:
+                try:
+                    return json.loads(m.group(1))
+                except Exception:
+                    parsed = _sanitize_and_parse(m.group(1))
+                    if parsed is not None:
+                        return parsed
+            # 3) Balanced-brace extraction
+            candidate = _extract_balanced_json(text)
+            if candidate:
+                try:
+                    return json.loads(candidate)
+                except Exception:
+                    parsed = _sanitize_and_parse(candidate)
+                    if parsed is not None:
+                        return parsed
             return {}
+
+        return _try_parse_json(result)
             
     except Exception as e:
         print(f"LLM call error: {e}")
@@ -513,7 +668,7 @@ def build_adaptive_field_instructions(learning_prompts):
         'publication_date': "Publication date",
         'source': "Source organization",
         'language': "Document language code (en, fr, etc.)",
-        'context': "field , pharmaceutical, legal, etc.",
+        'context': "The field of the document content (pharmaceutical, legal, etc.) ",
     }
     
     for field, base_desc in base_fields.items():

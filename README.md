@@ -28,6 +28,20 @@ Selon votre rôle (_Métadonneur_, _Annotateur_, _Expert_, ou _Client_), vous b�
 | Annotateur   | Annotateur  | anno@12345 |
 | Expert       | Expert      | exp@12345  |
 | Client       | Client      | cli@12345  |
+| Dev Metier   | Dev         | devn@12345 |
+
+---
+
+## 🧭 Vue d’ensemble du Workflow
+
+1) **Métadonneur**
+   - Upload du PDF (fichier ou URL) → extraction IA des métadonnées → correction/validation → extraction des pages et texte → document marqué « validé ».
+2) **Annotateur**
+   - Accède aux documents validés → annotations IA (GROQ) + manuelles → validation des pages (RLHF) → une fois toutes les pages validées: document auto-marqué « prêt pour expert ».
+3) **Expert**
+   - Révision complète → consolidation et validation (analyse réglementaire experte et résumé global) → publication vers les espaces consultés côté Client.
+4) **Client / Library**
+   - Consulte, filtre, télécharge → bouton « Résumé » (texte IA stocké) et « Régénérer le résumé » (ne modifie pas l’analyse experte) → « Analyser » affiche l’analyse experte consolidée (sans régénération IA).
 
 ---
 
@@ -51,7 +65,11 @@ Selon votre rôle (_Métadonneur_, _Annotateur_, _Expert_, ou _Client_), vous b�
 - Accédez à la fenêtre de validation
 - Visualisez, modifiez, sauvegardez les métadonnées, consultez l'historique (logs)
 - Supprimez un document si nécessaire
-- **Validez** : le document est envoyé dans la section _Library_ du Client
+- **Validez** : le document devient « validé » et les pages sont extraites (texte nettoyé par page)
+  - Champs mis à jour (modèle `RawDocument`) : `is_validated`, `validated_at`, `pages_extracted`, `total_pages`
+  - Les **pages** (`DocumentPage`) contiennent `cleaned_text` pour alimenter l’annotation et les résumés
+
+> Une fois validé par le Métadonneur, le document devient disponible pour l’**Annotateur**.
 
 ---
 
@@ -60,28 +78,39 @@ Selon votre rôle (_Métadonneur_, _Annotateur_, _Expert_, ou _Client_), vous b�
 ### Accès & Interface
 
 - Deux onglets principaux :  
-  - Statistiques (sur les documents à annoter/améliorer)
+  - Statistiques (sur les documents à annoter/améliorer)  
   - Annotation
 
 #### Fonctionnement
 
 **a. Annotation d'un document**
-- Liste des documents validés par le Métadonneur
+- Liste des documents **validés** par le Métadonneur
 - Cliquez sur **Annoter** pour ouvrir l'interface
 
 **b. Modes d'annotation**
-- **Annotation IA** : suggestions automatiques par l'IA (guidelines réglementaires)
-  - Vous pouvez valider, corriger ou supprimer chaque annotation
-- **Annotation manuelle** : sélectionnez un type (Substance, Dosage, etc.) ou créez-en un
-  - Surlignez un texte pour annoter automatiquement
+- **Annotation IA (GROQ)** : suggestions automatiques (entités/segments) avec justification
+  - Endpoint côté serveur: `rawdocs:ai_annotate_page_groq` (POST)
+  - Les annotations sont persistées (modèle `Annotation`), types dynamiques (`AnnotationType`)
+- **Annotation manuelle** : sélectionnez un type (ex: Substance, Dosage…) ou créez-en un
+  - Surlignez du texte → l’annotation est créée et liée à la page
 
-_Nouveautés_ :  
-- Annotations visibles et surlignées dans le texte
-- Visualisation du PDF original dans une nouvelle fenêtre
+**c. Validation avec apprentissage (RLHF)**
+- Bouton « Valider la page » → la page est marquée `is_validated_by_human = True`
+- Un processeur RLHF compare annotations IA vs annotations humaines pour améliorer les performances
+- Quand toutes les pages du document sont validées :  
+  → le document est automatiquement marqué `is_ready_for_expert = True` (et `expert_ready_at` renseigné)
 
-**c. Validation et envoi à l'Expert**
-- Validez la page pour contribuer à l'amélioration de l'IA
-- Une fois toutes les entités requises annotées (Product, Substance active, Adresse, etc.), soumettez le document à l'Expert
+### Visualisation JSON & Résumés (Annotateur)
+
+- Les vues « JSON » permettent de consulter le JSON d’annotations page par page ou global document, avec un résumé calculé:
+  - `rawdocs:view_page_annotation_json` (GET)
+  - `rawdocs:view_document_annotation_json` (GET)
+- Régénération (si activée dans l’UI d’annotation) :
+  - `rawdocs:generate_page_annotation_summary` (POST)
+  - `rawdocs:generate_document_annotation_summary` (POST)
+
+> Côté Annotateur, ces générateurs peuvent recalculer un résumé basé sur le texte nettoyé et/ou les annotations.  
+> Cela n’écrase pas l’analyse réglementaire experte.
 
 ---
 
@@ -90,7 +119,7 @@ _Nouveautés_ :
 ### Accès & Interface
 
 - Onglet **Statistiques** (suivi de l'activité & performance)
-- Liste des documents à réviser
+- Liste des documents **prêts pour expert** (`is_ready_for_expert = True`)
 
 #### Fonctionnement
 
@@ -99,11 +128,13 @@ _Nouveautés_ :
 - Interface : texte annoté, liste des annotations détaillées, PDF original consultable
 
 **b. Actions de l'Expert**
-- **Validez** une annotation correcte
-- **Rejetez** une annotation erronée/incomplète (suppression possible)
-- **Modifiez** le contenu ou type d'annotation si nécessaire  
-Après validation :  
-Le document apparaît dans la section **Product** côté Client (dossier "ctd"), avec sites de fabrication associés
+- **Validez** les annotations correctes / **Rejetez** les annotations erronées
+- **Modifiez** le contenu ou le type d’annotation si nécessaire
+- Rédigez / consolidez l’**analyse réglementaire experte** (ex: obligations, délais, autorités)
+- Le système stocke l’analyse experte consolidée (modèle `DocumentRegulatoryAnalysis` liée au document)  
+  et peut conserver un **résumé global validé par l’expert**.
+
+> Après validation Expert, le document et ses informations consolidées deviennent accessibles côté **Client** (Products / Library).
 
 ---
 
@@ -119,29 +150,45 @@ Le document apparaît dans la section **Product** côté Client (dossier "ctd"),
 
 #### Library (Bibliothèque de documents)
 
-- Tous les documents validés par le Métadonneur sont automatiquement publiés dans la Library
+- Tous les documents validés apparaissent dans la **Library** (y compris ceux uploadés par les clients)
 - Le client peut :  
   - Consulter toutes les métadonnées (titre, type, pays, langue, contexte, etc.)
   - Télécharger les PDF associés (recherche/filtrage)
+  - Ouvrir le **Résumé** ou **Régénérer le résumé**
+  - Voir le **Texte brut**
 
-#### **Upload de documents par le Client** 🆕
+#### Boutons et API (Library)
 
-- Les clients peuvent uploader leurs propres documents PDF via une interface moderne (drag & drop)
-- Extraction automatique des métadonnées via IA (pipeline Mistral AI)
-- Source du document forcée à "Client" pour une séparation claire
-- Validation automatique des documents uploadés
-- Stockage organisé dans un dossier dédié :  
-  `media/Client/YYYYMMDD_HHMMSS/document.pdf`
-- Catégorie "Client" ajoutée au dashboard, avec icône et couleur spécifique
-- Gestion complète : liste, détail, téléchargement et suppression sécurisée
-- Filtrage et tri par organisation dans la vue Library
-- Sécurité : chaque client ne voit que ses propres documents
+- **Analyser** (icône psychologie)  
+  Affiche l’**analyse réglementaire experte** existante (si disponible).  
+  - Endpoint: `POST /client/library/api/documents/<pk>/analyze/`  
+  - N’utilise pas l’IA, ne modifie rien.
 
-#### Products
+- **Résumé**  
+  Affiche le **résumé texte** stocké pour le document (`RawDocument.global_annotations_summary`).  
+  - Endpoint: `POST /client/library/api/documents/<pk>/summary/` (avec `{ force: false }`)  
+  - Si un résumé est déjà stocké, il est renvoyé tel quel (cached = true).
 
-- Après annotation & validation Expert, les documents sont visibles dans **Products**
-- Classés par catégorie (dossier CTD)
-- Visualisation des sites de fabrication extraits, associés à chaque produit
+- **Régénérer le résumé**  
+  Régénère uniquement le **résumé texte** (stocké dans `RawDocument.global_annotations_summary`).  
+  - Endpoint: `POST /client/library/api/documents/<pk>/summary/` (avec `{ force: true }`)  
+  - Met à jour les champs: `global_annotations_summary`, `global_annotations_summary_generated_at`  
+  - ⚠️ Ne modifie pas l’**analyse experte**.
+
+- **Texte brut**  
+  Retourne la concaténation du texte nettoyé par page.  
+  - Endpoint: `GET /client/library/api/documents/<pk>/raw-text/`
+
+#### Upload de documents par le Client 🆕
+
+- Interface d’upload moderne (drag & drop)
+- Extraction automatique des métadonnées (pipeline IA)
+- **Source** du document forcée à "Client" pour séparation claire
+- Validation et extraction de pages automatiques
+- Stockage organisé: `media/Client/YYYYMMDD_HHMMSS/document.pdf`
+- Sécurité: chaque client ne voit que ses documents
+
+> Les documents uploadés par le Client suivent le même **flux d’annotation**: une fois toutes les pages validées, ils basculent automatiquement en « prêt pour expert ».
 
 ---
 
@@ -270,4 +317,4 @@ Contactez l'équipe PharmaLabs — _réponse rapide assurée_ !
 
 ---
 
-**Bon usage de la plateforme PharmaLabs
+**Bon usage de la plateforme PharmaLabs**
