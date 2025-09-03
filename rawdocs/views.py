@@ -29,6 +29,7 @@ from django.conf import settings
 from pymongo import MongoClient
 from django.utils import timezone
 
+
 from .models import (
     RawDocument, MetadataLog,
     DocumentPage, AnnotationType,
@@ -41,14 +42,15 @@ from .annotation_utils import extract_pages_from_pdf
 from .rlhf_learning import RLHFGroqAnnotator
 from .table_image_extractor import TableImageExtractor
 
+
 # --- Mongo client (réutilisé) ---
 try:
     _mongo_client = MongoClient(settings.MONGO_URI, serverSelectionTimeoutMS=5000)
-    _mongo_coll = _mongo_client[settings.MONGO_DB][settings.MONGO_COLLECTION]
+    _mongo_coll   = _mongo_client[settings.MONGO_DB][settings.MONGO_COLLECTION]
     print("✅ Mongo prêt :", settings.MONGO_URI, settings.MONGO_DB, settings.MONGO_COLLECTION)
 except Exception as e:
     _mongo_client = None
-    _mongo_coll = None
+    _mongo_coll   = None
     print("⚠️ Mongo init KO:", e)
 
 
@@ -71,8 +73,8 @@ class RegisterForm(UserCreationForm):
         ("Metadonneur", "Métadonneur"),
         ("Annotateur", "Annotateur"),
         ("Expert", "Expert"),
-        ("Client", "Client"),
-        ("DevMetier", "Dev métier"),
+        ("Client", "Client"), 
+        ("DevMetier",   "Dev métier"), 
     ], label="Profil")
 
     class Meta:
@@ -115,9 +117,8 @@ def is_annotateur(user):
 def is_expert(user):
     return user.groups.filter(name="Expert").exists()
 
-
-def is_dev_metier(user):
-    return user.groups.filter(name="DevMetier").exists()
+def is_dev_metier(user):                              
+    return user.groups.filter(name="DevMetier").exists()    
 
 
 # ——— Authentication ————————————————————————————————————
@@ -164,7 +165,7 @@ def register(request):
                 return redirect('expert:dashboard')  # Expert dashboard
             elif grp == "Client":
                 return redirect('/client/')  # Client dashboard
-            elif grp == "DevMetier":
+            elif   grp == "DevMetier":   
                 return redirect('rawdocs:dev_metier_dashboard')  # dev metier dashboard
             else:
                 return redirect('rawdocs:dashboard')  # Fallback
@@ -211,12 +212,11 @@ def upload_pdf(request):
         doc_id = request.POST.get('doc_id')
         rd = get_object_or_404(RawDocument, id=doc_id, owner=request.user)
         edit_form = MetadataEditForm(request.POST)
-
+        
         # Get ORIGINAL AI extracted metadata (what AI first extracted)
         ai_metadata = {}
-        standard_fields = ['title', 'doc_type', 'publication_date', 'version', 'source', 'context', 'country',
-                           'language', 'url_source']
-
+        standard_fields = ['title', 'doc_type', 'publication_date', 'version', 'source', 'context', 'country', 'language', 'url_source']
+        
         # Get ORIGINAL AI extracted metadata (what was first extracted by LLM)
         ai_metadata = rd.original_ai_metadata or {}
 
@@ -224,10 +224,10 @@ def upload_pdf(request):
             # Collect human corrections
             human_metadata = {}
             changes_made = False
-
+            
             field_mapping = {
                 'title': 'title',
-                'type': 'doc_type',
+                'type': 'doc_type', 
                 'publication_date': 'publication_date',
                 'version': 'version',
                 'source': 'source',
@@ -236,12 +236,12 @@ def upload_pdf(request):
                 'language': 'language',
                 'url_source': 'url_source'
             }
-
+            
             for form_field, model_field in field_mapping.items():
                 new_value = edit_form.cleaned_data.get(form_field, '') or ''
                 old_value = getattr(rd, model_field, '') or ''
                 human_metadata[form_field] = new_value
-
+                
                 if str(old_value) != str(new_value):
                     changes_made = True
                     MetadataLog.objects.create(
@@ -250,10 +250,10 @@ def upload_pdf(request):
                         modified_by=request.user
                     )
                     setattr(rd, model_field, new_value)
-
+            
             if changes_made:
                 rd.save()
-
+                
                 # Process RLHF Learning ONLY if changes were made
                 from .metadata_rlhf_learning import MetadataRLHFLearner
                 learner = MetadataRLHFLearner()
@@ -281,13 +281,14 @@ def upload_pdf(request):
                 }
             else:
                 messages.info(request, "Aucune modification détectée.")
+  
 
         metadata = extract_metadonnees(rd.file.path, rd.url or "")
         text = extract_full_text(rd.file.path)
-
+        
         initial_data = {
             'title': rd.title or '',
-            'type': rd.doc_type or '',
+            'type': rd.doc_type or '', 
             'publication_date': rd.publication_date or '',
             'version': rd.version or '',
             'source': rd.source or '',
@@ -297,7 +298,7 @@ def upload_pdf(request):
             'url_source': rd.url_source or (rd.url or ''),
         }
         edit_form = MetadataEditForm(initial=initial_data)
-
+        
         context.update({
             'doc': rd,
             'metadata': metadata,
@@ -305,7 +306,7 @@ def upload_pdf(request):
             'edit_form': edit_form,
             'logs': MetadataLog.objects.filter(document=rd).order_by('-modified_at')
         })
-
+        
         return render(request, 'rawdocs/upload.html', context)
 
     # Handle file upload
@@ -328,7 +329,7 @@ def upload_pdf(request):
             rd.save()
             metadata = extract_metadonnees(rd.file.path, rd.url or "") or {}
             text = extract_full_text(rd.file.path)
-
+            
             # Save extracted metadata to the model
             if metadata:
                 rd.original_ai_metadata = metadata
@@ -342,13 +343,13 @@ def upload_pdf(request):
                 rd.language = metadata.get('language', '')
                 rd.url_source = metadata.get('url_source', rd.url or '')
                 rd.save()
-
+                
                 print(f"✅ Métadonnées LLM sauvegardées pour le document {rd.pk}")
 
             # Create form for editing with initial data
             initial_data = {
                 'title': rd.title or '',
-                'type': rd.doc_type or '',
+                'type': rd.doc_type or '', 
                 'publication_date': rd.publication_date or '',
                 'version': rd.version or '',
                 'source': rd.source or '',
@@ -407,12 +408,11 @@ def edit_metadata(request, doc_id):
     metadata = extract_metadonnees(rd.file.path, rd.url or "")
 
     if request.method == 'POST':
-        form = MetadataEditForm(request.POST)
+        form = MetadataEditForm(request.POST)        
         if form.is_valid():
             # Handle standard fields (your existing code)
-            standard_fields = ['title', 'type', 'publication_date', 'version', 'source', 'context', 'country',
-                               'language', 'url_source']
-
+            standard_fields = ['title', 'type', 'publication_date', 'version', 'source', 'context', 'country', 'language', 'url_source']
+            
             for field_name in standard_fields:
                 if field_name in form.cleaned_data:
                     new_value = form.cleaned_data[field_name]
@@ -436,7 +436,7 @@ def edit_metadata(request, doc_id):
             rd.language = form.cleaned_data.get('language', rd.language) or ''
             rd.url_source = form.cleaned_data.get('url_source', rd.url_source) or (rd.url or '')
             rd.save()
-
+            
             from .models import CustomField, CustomFieldValue
             for key, value in request.POST.items():
                 if key.startswith('custom_'):
@@ -453,17 +453,18 @@ def edit_metadata(request, doc_id):
                             old_val = custom_value.value
                             custom_value.value = value
                             custom_value.save()
-
+                            
                             MetadataLog.objects.create(
-                                document=rd,
+                                document=rd, 
                                 field_name=f"Custom: {field_name}",
-                                old_value=old_val,
+                                old_value=old_val, 
                                 new_value=value,
                                 modified_by=request.user
                             )
                     except CustomField.DoesNotExist:
                         pass
-
+            
+            
             return redirect('rawdocs:document_list')
     else:
         initial_data = {
@@ -480,7 +481,7 @@ def edit_metadata(request, doc_id):
         form = MetadataEditForm(initial=initial_data)
 
     logs = MetadataLog.objects.filter(document=rd).order_by('-modified_at')
-
+    
     # Load existing custom fields fo this document ONLY
     from .models import CustomField, CustomFieldValue
     custom_fields_data = []
@@ -490,7 +491,7 @@ def edit_metadata(request, doc_id):
             'type': custom_value.field.field_type,
             'value': custom_value.value
         })
-
+    
     return render(request, 'rawdocs/edit_metadata.html', {
         'form': form,
         'metadata': metadata,
@@ -498,7 +499,6 @@ def edit_metadata(request, doc_id):
         'logs': logs,
         'custom_fields_data': custom_fields_data  # ADD THIS LINE
     })
-
 
 @login_required(login_url='rawdocs:login')
 @user_passes_test(is_metadonneur)
@@ -661,26 +661,19 @@ def annotate_document(request, doc_id):
     page_obj = get_object_or_404(DocumentPage, document=document, page_number=pnum)
 
     # Build contextual annotation types (reduced/dynamic)
-    used_type_ids = Annotation.objects.filter(page__document=document).values_list('annotation_type_id',
-                                                                                   flat=True).distinct()
+    used_type_ids = Annotation.objects.filter(page__document=document).values_list('annotation_type_id', flat=True).distinct()
     context_text = " ".join([document.context or '', document.doc_type or '', document.source or '']).lower()
     whitelist = set()
-    if any(k in context_text for k in ['pharma', 'pharmacie', 'medicament', 'drug', 'clinical', 'trial', 'essai']):
-        whitelist.update([AnnotationType.REQUIRED_DOCUMENT, AnnotationType.AUTHORITY, AnnotationType.LEGAL_REFERENCE,
-                          AnnotationType.DELAY, AnnotationType.PROCEDURE_TYPE, AnnotationType.VARIATION_CODE,
-                          AnnotationType.REQUIRED_CONDITION, AnnotationType.FILE_TYPE])
-    elif any(k in context_text for k in ['regulatory', 'réglementaire', 'compliance']):
-        whitelist.update([AnnotationType.REQUIRED_DOCUMENT, AnnotationType.AUTHORITY, AnnotationType.LEGAL_REFERENCE,
-                          AnnotationType.DELAY, AnnotationType.PROCEDURE_TYPE])
-    elif any(k in context_text for k in ['ema', 'europe', 'eu']):
-        whitelist.update([AnnotationType.AUTHORITY, AnnotationType.LEGAL_REFERENCE, AnnotationType.DELAY,
-                          AnnotationType.PROCEDURE_TYPE, AnnotationType.REQUIRED_DOCUMENT])
-    elif any(k in context_text for k in ['fda', 'usa', 'united states']):
-        whitelist.update([AnnotationType.AUTHORITY, AnnotationType.LEGAL_REFERENCE, AnnotationType.DELAY,
-                          AnnotationType.REQUIRED_DOCUMENT])
+    if any(k in context_text for k in ['pharma','pharmacie','medicament','drug','clinical','trial','essai']):
+        whitelist.update([AnnotationType.REQUIRED_DOCUMENT, AnnotationType.AUTHORITY, AnnotationType.LEGAL_REFERENCE, AnnotationType.DELAY, AnnotationType.PROCEDURE_TYPE, AnnotationType.VARIATION_CODE, AnnotationType.REQUIRED_CONDITION, AnnotationType.FILE_TYPE])
+    elif any(k in context_text for k in ['regulatory','réglementaire','compliance']):
+        whitelist.update([AnnotationType.REQUIRED_DOCUMENT, AnnotationType.AUTHORITY, AnnotationType.LEGAL_REFERENCE, AnnotationType.DELAY, AnnotationType.PROCEDURE_TYPE])
+    elif any(k in context_text for k in ['ema','europe','eu']):
+        whitelist.update([AnnotationType.AUTHORITY, AnnotationType.LEGAL_REFERENCE, AnnotationType.DELAY, AnnotationType.PROCEDURE_TYPE, AnnotationType.REQUIRED_DOCUMENT])
+    elif any(k in context_text for k in ['fda','usa','united states']):
+        whitelist.update([AnnotationType.AUTHORITY, AnnotationType.LEGAL_REFERENCE, AnnotationType.DELAY, AnnotationType.REQUIRED_DOCUMENT])
     else:
-        whitelist.update([AnnotationType.REQUIRED_DOCUMENT, AnnotationType.AUTHORITY, AnnotationType.LEGAL_REFERENCE,
-                          AnnotationType.DELAY, AnnotationType.PROCEDURE_TYPE])
+        whitelist.update([AnnotationType.REQUIRED_DOCUMENT, AnnotationType.AUTHORITY, AnnotationType.LEGAL_REFERENCE, AnnotationType.DELAY, AnnotationType.PROCEDURE_TYPE])
 
     # Show all types so newly created custom types are available immediately
     annotation_types = AnnotationType.objects.all().order_by('display_name')
@@ -726,14 +719,14 @@ def save_manual_annotation(request):
             'error': str(e),
             'message': 'Erreur lors de la sauvegarde'
         }, status=500)
-
+    
 
 @login_required
 def get_page_annotations(request, page_id):
     try:
         page = get_object_or_404(DocumentPage, id=page_id)
         annotations = page.annotations.all().select_related('annotation_type').order_by('start_pos')
-
+        
         anns = []
         for a in annotations:
             anns.append({
@@ -755,7 +748,7 @@ def get_page_annotations(request, page_id):
             'page_text': page.cleaned_text,
             'total_annotations': len(anns)
         })
-
+        
     except Exception as e:
         print(f"Error loading annotations: {e}")
         return JsonResponse({
@@ -765,27 +758,27 @@ def get_page_annotations(request, page_id):
             'page_text': '',
             'total_annotations': 0
         })
-
+    
 
 @login_required
-@csrf_exempt
+@csrf_exempt  
 def delete_annotation(request, annotation_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
 
     try:
         ann = get_object_or_404(Annotation, id=annotation_id)
-
+        
         # Check permissions
         if ann.created_by != request.user and not request.user.groups.filter(name="Expert").exists():
             return JsonResponse({'error': 'Permission denied'}, status=403)
 
         # Store page reference before deletion
         page = ann.page
-
+        
         # Delete the annotation
         ann.delete()
-
+        
         # Check if page still has annotations
         remaining_annotations = page.annotations.count()
         if remaining_annotations == 0:
@@ -797,14 +790,14 @@ def delete_annotation(request, annotation_id):
             'message': 'Annotation supprimée',
             'remaining_annotations': remaining_annotations
         })
-
+        
     except Exception as e:
         print(f"Error deleting annotation: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e)
         }, status=500)
-
+    
 
 @login_required
 @csrf_exempt
@@ -1127,13 +1120,12 @@ def delete_annotation_type(request):
     except Exception as e:
         print(f"❌ Error deleting annotation type: {e}")
         return JsonResponse({'error': str(e)}, status=500)
-
-
+    
 @login_required
 def view_original_document(request, document_id):
     """View the original document PDF - RAWDOCS VERSION"""
     document = get_object_or_404(RawDocument, id=document_id)
-
+    
     # Case 1: Document has a local file
     if document.file:
         try:
@@ -1148,7 +1140,7 @@ def view_original_document(request, document_id):
                 f"<p>Le fichier PDF n'a pas pu être chargé: {str(e)}</p>"
                 f"<script>window.close();</script></body></html>"
             )
-
+    
     # Case 2: Document was uploaded via URL
     elif document.url:
         try:
@@ -1161,7 +1153,7 @@ def view_original_document(request, document_id):
                 f"<p><a href='{document.url}' target='_blank'>Essayer d'ouvrir directement: {document.url}</a></p>"
                 f"<script>window.close();</script></body></html>"
             )
-
+    
     # Case 3: No file and no URL
     else:
         return HttpResponse(
@@ -1170,7 +1162,6 @@ def view_original_document(request, document_id):
             "<script>window.close();</script></body></html>"
         )
 
-
 @login_required
 def document_tables_images(request, document_id):
     """
@@ -1178,25 +1169,25 @@ def document_tables_images(request, document_id):
     """
     try:
         document = RawDocument.objects.get(id=document_id)
-
+        
         # Vérifier les permissions
         if not request.user.is_staff and document.owner != request.user:
             messages.error(request, "Vous n'avez pas accès à ce document.")
             return redirect('rawdocs:document_list')
-
+        
         # Créer l'extracteur
         extractor = TableImageExtractor(document.file.path)
-
+        
         # Extraire tableaux et images
         tables = extractor.extract_tables_with_structure()
         images = extractor.extract_images()
-
+        
         # Obtenir le HTML combiné
         combined_html = extractor.get_combined_html()
-
+        
         # Résumé de l'extraction
         summary = extractor.get_extraction_summary()
-
+        
         context = {
             'document': document,
             'tables': tables,
@@ -1205,16 +1196,15 @@ def document_tables_images(request, document_id):
             'summary': summary,
             'total_elements': len(tables) + len(images)
         }
-
+        
         return render(request, 'rawdocs/document_tables_images.html', context)
-
+        
     except RawDocument.DoesNotExist:
         messages.error(request, "Document non trouvé.")
         return redirect('rawdocs:document_list')
     except Exception as e:
         messages.error(request, f"Erreur lors de l'extraction: {str(e)}")
         return redirect('rawdocs:document_detail', document_id=document_id)
-
 
 @login_required
 def export_tables_excel(request, document_id):
@@ -1223,29 +1213,29 @@ def export_tables_excel(request, document_id):
     """
     try:
         document = RawDocument.objects.get(id=document_id)
-
+        
         # Vérifier les permissions
         if not request.user.is_staff and document.owner != request.user:
             return JsonResponse({'error': 'Accès non autorisé'}, status=403)
-
+        
         # Créer l'extracteur et extraire les tableaux
         extractor = TableImageExtractor(document.file.path)
         tables = extractor.extract_tables_with_structure()
-
+        
         if not tables:
             return JsonResponse({'error': 'Aucun tableau trouvé dans ce document'}, status=404)
-
+        
         # Créer le fichier Excel
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
         filename = f"tableaux_{document.title}_{document.id}.xlsx"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
-
+        
         # Utiliser un buffer pour créer le fichier Excel
         import io
         import pandas as pd
-
+        
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
             for table in tables:
@@ -1253,20 +1243,19 @@ def export_tables_excel(request, document_id):
                 # Limiter la longueur du nom de feuille
                 if len(sheet_name) > 31:
                     sheet_name = f"P{table['page']}_T{table['table_number']}"
-
+                
                 table['dataframe'].to_excel(writer, sheet_name=sheet_name, index=False)
-
+        
         buffer.seek(0)
         response.write(buffer.getvalue())
         buffer.close()
-
+        
         return response
-
+        
     except RawDocument.DoesNotExist:
         return JsonResponse({'error': 'Document non trouvé'}, status=404)
     except Exception as e:
         return JsonResponse({'error': f'Erreur lors de l\'export: {str(e)}'}, status=500)
-
 
 @login_required
 def document_detail(request, document_id):
@@ -1275,30 +1264,29 @@ def document_detail(request, document_id):
     """
     try:
         document = get_object_or_404(RawDocument, id=document_id)
-
+        
         # Vérifier les permissions
         if not request.user.is_staff and document.owner != request.user:
             messages.error(request, "Vous n'avez pas accès à ce document.")
             return redirect('rawdocs:document_list')
-
+        
         # Ajouter basename pour le template
         document.basename = os.path.basename(document.file.name) if document.file else "Document sans fichier"
-
+        
         context = {
             'doc': document,
             'document': document,
         }
-
+        
         return render(request, 'rawdocs/details_metadata.html', context)
-
+        
     except RawDocument.DoesNotExist:
         messages.error(request, "Document non trouvé.")
         return redirect('rawdocs:document_list')
     except Exception as e:
         messages.error(request, f"Erreur lors de l'affichage du document: {str(e)}")
         return redirect('rawdocs:document_list')
-
-
+    
 @login_required
 def add_field_ajax(request):
     if request.method == 'POST':
@@ -1307,50 +1295,49 @@ def add_field_ajax(request):
         name = data.get('name')
         field_type = data.get('type', 'text')
         doc_id = data.get('doc_id')  # Get document ID
-
+        
         from .models import CustomField, CustomFieldValue, RawDocument
-
+        
         # Get the document
         document = get_object_or_404(RawDocument, id=doc_id)
-
+        
         # Get or create the field type globally (for field type reference)
         field, created = CustomField.objects.get_or_create(
             name=name,
             defaults={'field_type': field_type}
         )
-
+        
         # Create the field value ONLY for this specific document
         custom_value, value_created = CustomFieldValue.objects.get_or_create(
             document=document,
             field=field,
             defaults={'value': ''}  # Empty value initially
         )
-
+        
         if value_created:
             return JsonResponse({
-                'success': True,
+                'success': True, 
                 'message': f'Field "{name}" added to this document only!'
             })
         else:
             return JsonResponse({
-                'success': False,
+                'success': False, 
                 'message': f'Field "{name}" already exists for this document!'
             })
-
+    
     return JsonResponse({'success': False})
 
-
-@login_required
+@login_required  
 def save_custom_field(request):
     if request.method == 'POST':
         doc_id = request.POST.get('doc_id')
         field_name = request.POST.get('field_name')
         value = request.POST.get('value', '')
-
+        
         from .models import RawDocument, CustomField, CustomFieldValue
         document = get_object_or_404(RawDocument, id=doc_id)
         field = get_object_or_404(CustomField, name=field_name)
-
+        
         custom_value, created = CustomFieldValue.objects.get_or_create(
             document=document,
             field=field,
@@ -1359,9 +1346,9 @@ def save_custom_field(request):
         if not created:
             custom_value.value = value
             custom_value.save()
-
+            
         return JsonResponse({'success': True})
-
+    
     return JsonResponse({'success': False})
 
 
@@ -1369,29 +1356,29 @@ def create_product_from_metadata(document):
     """Create product from custom metadata fields"""
     from .models import CustomFieldValue
     from client.products.models import Product
-
+    
     # Find Product/Produit field (case insensitive)
     custom_values = CustomFieldValue.objects.filter(document=document)
-
+    
     product_field = None
     product_name = None
-
+    
     for custom_value in custom_values:
         field_name = custom_value.field.name.lower()
         if field_name in ['product', 'produit']:
             product_name = custom_value.value.strip()
             break
-
+    
     if not product_name:
         return None
-
+    
     # Create product with metadata fields
     product_data = {'name': product_name}
-
+    
     # Auto-map matching fields
     field_mapping = {
         'dosage': 'dosage',
-        'dose': 'dosage',
+        'dose': 'dosage', 
         'active_ingredient': 'active_ingredient',
         'substance_active': 'active_ingredient',
         'form': 'form',
@@ -1399,12 +1386,12 @@ def create_product_from_metadata(document):
         'therapeutic_area': 'therapeutic_area',
         'zone_therapeutique': 'therapeutic_area'
     }
-
+    
     for custom_value in custom_values:
         field_name = custom_value.field.name.lower()
         if field_name in field_mapping and custom_value.value:
             product_data[field_mapping[field_name]] = custom_value.value
-
+    
     # Create the product
     product = Product.objects.create(
         name=product_data['name'],
@@ -1415,7 +1402,7 @@ def create_product_from_metadata(document):
         status='commercialise',
         source_document=document
     )
-
+    
     print(f"✅ Product '{product.name}' created from metadata!")
     return product
 
@@ -1690,8 +1677,7 @@ def annotate_document(request, doc_id):
         global_analysis = None
 
     # Build reduced, default annotation types + include types already used in this document
-    used_type_ids = Annotation.objects.filter(page__document=document).values_list('annotation_type_id',
-                                                                                   flat=True).distinct()
+    used_type_ids = Annotation.objects.filter(page__document=document).values_list('annotation_type_id', flat=True).distinct()
 
     # Default whitelist (keywords-independent)
     whitelist = {
@@ -1924,10 +1910,8 @@ def dev_metier_dashboard(request):
 
     # Étapes exclusives pour la répartition
     uploaded_count = max(total_docs - validated_metadonneur_total, 0)  # déposés mais pas encore validés par métadonneur
-    in_annotation_count = max(validated_metadonneur_total - ready_for_expert_total,
-                              0)  # validés par métadonneur mais pas encore prêts expert
-    awaiting_expert_count = max(ready_for_expert_total - expert_validated_total,
-                                0)  # prêts expert mais pas encore validés expert
+    in_annotation_count = max(validated_metadonneur_total - ready_for_expert_total, 0)  # validés par métadonneur mais pas encore prêts expert
+    awaiting_expert_count = max(ready_for_expert_total - expert_validated_total, 0)  # prêts expert mais pas encore validés expert
 
     processed_percent = int((expert_validated_total / total_docs) * 100) if total_docs else 0
     validated_percent = int((validated_metadonneur_total / total_docs) * 100) if total_docs else 0
@@ -1967,14 +1951,12 @@ def dev_metier_dashboard(request):
         "pie_data": pie_data,
     })
 
-
 # =================== NOUVELLES VUES POUR JSON ET RÉSUMÉS D'ANNOTATIONS ===================
 
 from .regulatory_analyzer import RegulatoryAnalyzer
 
 from collections import OrderedDict
 from datetime import datetime
-
 
 def _build_entities_map(annotations_qs, use_display_name=True):
     """
@@ -2000,7 +1982,6 @@ def _build_entities_map(annotations_qs, use_display_name=True):
             seen_per_key[key].add(val)
 
     return entities
-
 
 @login_required
 @csrf_exempt
@@ -2061,6 +2042,7 @@ def generate_page_annotation_summary(request, page_id):
     except Exception as e:
         print(f"❌ Erreur génération résumé page {page_id}: {e}")
         return JsonResponse({'error': f'Erreur lors de la génération: {str(e)}'}, status=500)
+
 
 
 @login_required
@@ -2138,7 +2120,6 @@ def generate_document_annotation_summary(request, doc_id):
         print(f"❌ Erreur génération résumé document {doc_id}: {e}")
         return JsonResponse({'error': f'Erreur lors de la génération: {str(e)}'}, status=500)
 
-
 def generate_entities_based_page_summary(entities, page_number, document_title):
     """
     Résumé NL d'une page à partir du dict {entité -> [valeurs]}.
@@ -2176,7 +2157,7 @@ Réponds UNIQUEMENT par le paragraphe.
 
         analyzer = RegulatoryAnalyzer()
         response = analyzer.call_groq_api(prompt, max_tokens=280)
-        return response.strip() if response else f"Page {page_number}: synthèse de {total_pairs} élément(s) annoté(s) sur les entités « {', '.join(list(entities.keys())[:5])}{'…' if len(entities) > 5 else ''} »."
+        return response.strip() if response else f"Page {page_number}: synthèse de {total_pairs} élément(s) annoté(s) sur les entités « {', '.join(list(entities.keys())[:5])}{'…' if len(entities)>5 else ''} »."
     except Exception as e:
         print(f"❌ Erreur génération résumé (page): {e}")
         # Fallback minimal
@@ -2230,7 +2211,6 @@ Réponds UNIQUEMENT par le paragraphe.
         total_values = sum(len(v) for v in entities.values())
         return f"Document : {total_values} valeur(s) sur {len(entities)} entité(s)."
 
-
 @login_required
 def view_page_annotation_json(request, page_id):
     """
@@ -2267,7 +2247,7 @@ def view_page_annotation_json(request, page_id):
     except Exception as e:
         messages.error(request, f"Erreur: {str(e)}")
         return redirect('rawdocs:annotation_dashboard')
-
+    
 
 @login_required
 @user_passes_test(is_dev_metier)
@@ -2420,7 +2400,6 @@ def view_document_annotation_json(request, doc_id):
         messages.error(request, f"Erreur: {str(e)}")
         return redirect('rawdocs:annotation_dashboard')
 
-
 ##################edit################
 # Ajouter cette nouvelle vue dans rawdocs/views.py
 
@@ -2551,11 +2530,9 @@ def get_annotation_details(request, annotation_id):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
-
 # =================== NOUVELLES VUES POUR L'ÉDITION DU RÉSUMÉ GLOBAL PAR L'EXPERT ===================
 
 from .models import GlobalSummaryEditHistory  # Import du modèle depuis models.py
-
 
 @login_required
 @user_passes_test(is_expert)
@@ -2603,7 +2580,6 @@ def edit_global_summary(request, doc_id):
         print(f"❌ Erreur modification résumé global du document {doc_id}: {e}")
         return JsonResponse({'error': f'Erreur lors de la modification: {str(e)}'}, status=500)
 
-
 @login_required
 @user_passes_test(is_expert)
 def get_global_summary_history(request, doc_id):
@@ -2631,7 +2607,6 @@ def get_global_summary_history(request, doc_id):
 
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
-
 
 @login_required
 @user_passes_test(is_expert)
@@ -2664,6 +2639,7 @@ def validate_global_summary(request, doc_id):
     except Exception as e:
         print(f"❌ Erreur validation résumé global du document {doc_id}: {e}")
         return JsonResponse({'error': f'Erreur lors de la validation: {str(e)}'}, status=500)
+    
 
 
 @login_required
@@ -2672,28 +2648,28 @@ def metadata_learning_dashboard(request):
     """Dashboard showing AI learning statistics with proper calculations"""
     try:
         from .models import MetadataFeedback, MetadataLearningMetrics
-
+        
         total_feedbacks = MetadataFeedback.objects.count()
-
+        
         if total_feedbacks == 0:
             return render(request, 'rawdocs/learning_dashboard.html', {
                 'no_data': True
             })
-
+        
         # Calculate average score
         avg_score = MetadataFeedback.objects.aggregate(
             avg=models.Avg('feedback_score')
         )['avg'] or 0
-
+        
         # Field performance with percentages calculated
         field_stats = {}
         document_stats = {}  # NEW: Track per-document performance
-
+        
         for feedback in MetadataFeedback.objects.all():
             corrections = feedback.corrections_made
             doc_id = feedback.document.id
             doc_title = feedback.document.title or f"Document {doc_id}"
-
+            
             # Initialize document stats
             if doc_id not in document_stats:
                 document_stats[doc_id] = {
@@ -2703,37 +2679,37 @@ def metadata_learning_dashboard(request):
                     'missed': 0,
                     'precision': 0
                 }
-
+            
             for kept in corrections.get('kept_correct', []):
                 field = kept.get('field')
                 if field not in field_stats:
                     field_stats[field] = {'correct': 0, 'wrong': 0, 'missed': 0}
                 field_stats[field]['correct'] += 1
                 document_stats[doc_id]['correct'] += 1
-
+            
             for wrong in corrections.get('corrected_fields', []):
                 field = wrong.get('field')
                 if field not in field_stats:
                     field_stats[field] = {'correct': 0, 'wrong': 0, 'missed': 0}
                 field_stats[field]['wrong'] += 1
                 document_stats[doc_id]['wrong'] += 1
-
+            
             for missed in corrections.get('missed_fields', []):
                 field = missed.get('field')
                 if field not in field_stats:
                     field_stats[field] = {'correct': 0, 'wrong': 0, 'missed': 0}
                 field_stats[field]['missed'] += 1
                 document_stats[doc_id]['missed'] += 1
-
+        
         # Calculate precision percentages
         for field, stats in field_stats.items():
             total = stats['correct'] + stats['wrong'] + stats['missed']
             stats['precision'] = int((stats['correct'] / total * 100)) if total > 0 else 0
-
+        
         for doc_id, stats in document_stats.items():
             total = stats['correct'] + stats['wrong'] + stats['missed']
             stats['precision'] = int((stats['correct'] / total * 100)) if total > 0 else 0
-
+        
         # Get improvement trend
         feedbacks = MetadataFeedback.objects.order_by('created_at')
         improvement = 0
@@ -2741,7 +2717,7 @@ def metadata_learning_dashboard(request):
             first_score = feedbacks.first().feedback_score * 100
             last_score = feedbacks.last().feedback_score * 100
             improvement = int(last_score - first_score)
-
+        
         return render(request, 'rawdocs/learning_dashboard.html', {
             'total_feedbacks': total_feedbacks,
             'avg_score': int(avg_score * 100),
@@ -2750,21 +2726,20 @@ def metadata_learning_dashboard(request):
             'improvement': improvement,
             'has_data': True
         })
-
+        
     except Exception as e:
         print(f"Learning dashboard error: {e}")
         return render(request, 'rawdocs/learning_dashboard.html', {'error': str(e)})
 
-
-@login_required
+@login_required 
 def metadata_learning_api(request):
     """API for learning stats"""
     try:
         from .models import MetadataFeedback
-
+        
         total = MetadataFeedback.objects.count()
         avg = MetadataFeedback.objects.aggregate(avg=models.Avg('feedback_score'))['avg'] or 0
-
+        
         return JsonResponse({
             'total_feedbacks': total,
             'average_score': avg * 100,
@@ -2772,12 +2747,11 @@ def metadata_learning_api(request):
         })
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
-
+    
 
 from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
-
 
 @require_http_methods(["POST"])
 def clear_page_annotations(request, page_id):
@@ -2844,8 +2818,7 @@ def save_document_json_devmetier(request, doc_id):
                 'modified': res.modified_count,
                 'upserted': getattr(res, "upserted_id", None) is not None
             }
-            print(
-                f"✅ Mongo write d{doc_id}: matched={res.matched_count} modified={res.modified_count} upserted={getattr(res, 'upserted_id', None)}")
+            print(f"✅ Mongo write d{doc_id}: matched={res.matched_count} modified={res.modified_count} upserted={getattr(res,'upserted_id',None)}")
         else:
             print("⚠️ Pas de connexion Mongo (_mongo_coll is None)")
 
