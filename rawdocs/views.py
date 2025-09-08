@@ -23,6 +23,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import views as auth_views
 from django.http import HttpResponse
 from django.views.decorators.http import require_POST
+from difflib import SequenceMatcher
 from .metadata_rlhf_learning import MetadataRLHFLearner
 from datetime import timezone as dt_timezone
 from django.conf import settings
@@ -40,7 +41,6 @@ from .models import (
 from .utils import extract_metadonnees, extract_full_text
 from .annotation_utils import extract_pages_from_pdf
 from .rlhf_learning import RLHFGroqAnnotator
-from .table_image_extractor import TableImageExtractor
 
 
 # --- Mongo client (réutilisé) ---
@@ -575,7 +575,7 @@ def validate_document(request, doc_id):
                     document.pages_extracted = True
 
                     document.is_validated = True
-                    document.validated_at = datetime.now()
+                    document.validated_at = timezone.now()
                     document.save()
 
                     messages.success(request, f"Document validé ({document.total_pages} pages)")
@@ -865,11 +865,29 @@ def validate_page_annotations(request, page_id):
                 doc.save(update_fields=['is_ready_for_expert', 'expert_ready_at'])
         except Exception:
             pass
-
+        
+        # Format score with enhanced details
+        score_pct = int(feedback_result["feedback_score"] * 100)
+        quality_label = "Excellente" if score_pct >= 85 else "Bonne" if score_pct >= 70 else "Moyenne" if score_pct >= 50 else "À améliorer"
+        
+        # Get details from feedback result if available
+        precision = feedback_result.get("precision", 0)
+        recall = feedback_result.get("recall", 0)
+        
+        # Build detailed message
+        detailed_message = f'Page validée! Score: {score_pct}% ({quality_label}) - IA améliorée!'
+        
+        # If we have precision and recall info, include it
+        if precision and recall:
+            detailed_message = f'Page validée! Score: {score_pct}% ({quality_label}) - Précision: {int(precision*100)}%, Rappel: {int(recall*100)}% - IA améliorée!'
+            
         return JsonResponse({
             'success': True,
-            'message': f'Page validée! Score: {feedback_result["feedback_score"]:.0%} - IA améliorée!',
+            'message': detailed_message,
             'feedback_score': feedback_result['feedback_score'],
+            'quality_label': quality_label,
+            'precision': precision,
+            'recall': recall,
             'corrections_summary': feedback_result['corrections_summary'],
             'ai_improved': True
         })
@@ -1162,100 +1180,152 @@ def view_original_document(request, document_id):
             "<script>window.close();</script></body></html>"
         )
 
+
+
 @login_required
-def document_tables_images(request, document_id):
+def document_structured(request, document_id):
     """
-    Vue pour afficher les tableaux et images extraits d'un document
+    Affiche le contenu structuré (HTML) du document, comme dans Library.
+    - Utilise le cache RawDocument.structured_html si présent
+    - Utilise uniquement UltraAdvancedPDFExtractor (pas de fallback)
+    - Permet forcer régénération via ?regen=1
     """
     try:
         document = RawDocument.objects.get(id=document_id)
         
-        # Vérifier les permissions
+        # Permissions identiques à tables/images
         if not request.user.is_staff and document.owner != request.user:
             messages.error(request, "Vous n'avez pas accès à ce document.")
             return redirect('rawdocs:document_list')
         
-        # Créer l'extracteur
-        extractor = TableImageExtractor(document.file.path)
+        # Charger/générer HTML structuré
+        structured_html = document.structured_html or ''
+        method = document.structured_html_method or ''
+        confidence = document.structured_html_confidence
+        regen = request.GET.get('regen') in ['1', 'true', 'True']
         
-        # Extraire tableaux et images
-        tables = extractor.extract_tables_with_structure()
-        images = extractor.extract_images()
+        if (regen or not structured_html) and getattr(document, 'file', None):
+            # UltraAdvancedPDFExtractor uniquement
+            try:
+                from client.submissions.ctd_submission.utils_ultra_advanced import UltraAdvancedPDFExtractor
+                ultra = UltraAdvancedPDFExtractor()
+                ultra_result = ultra.extract_ultra_structured_content(document.file.path)
+                structured_html = (ultra_result or {}).get('html') or ''
+                method = (ultra_result or {}).get('extraction_method', 'ultra_advanced_combined')
+                confidence = (ultra_result or {}).get('confidence_score')
+            except Exception:
+                structured_html = ''
         
-        # Obtenir le HTML combiné
-        combined_html = extractor.get_combined_html()
-        
-        # Résumé de l'extraction
-        summary = extractor.get_extraction_summary()
+        # Sauvegarde cache si on a du contenu
+        if structured_html:
+            document.structured_html = structured_html
+            document.structured_html_generated_at = timezone.now()
+            document.structured_html_method = method
+            document.structured_html_confidence = confidence
+            document.save(update_fields=['structured_html','structured_html_generated_at','structured_html_method','structured_html_confidence'])
         
         context = {
             'document': document,
-            'tables': tables,
-            'images': images,
-            'combined_html': combined_html,
-            'summary': summary,
-            'total_elements': len(tables) + len(images)
+            'structured_html': structured_html or '',
+            'structured_html_method': method,
+            'structured_html_confidence': confidence,
         }
-        
-        return render(request, 'rawdocs/document_tables_images.html', context)
+        return render(request, 'rawdocs/document_structured.html', context)
         
     except RawDocument.DoesNotExist:
         messages.error(request, "Document non trouvé.")
         return redirect('rawdocs:document_list')
     except Exception as e:
-        messages.error(request, f"Erreur lors de l'extraction: {str(e)}")
-        return redirect('rawdocs:document_detail', document_id=document_id)
+        # Ne pas rediriger vers la page d'édition de métadonnées.
+        # Rester sur la page de contenu structuré et afficher l'erreur.
+        messages.error(request, f"Erreur lors de la génération du contenu structuré: {str(e)}")
+        try:
+            document = RawDocument.objects.get(id=document_id)
+        except Exception:
+            document = None
+        context = {
+            'document': document,
+            'structured_html': '',
+            'structured_html_method': '',
+            'structured_html_confidence': None,
+            'error': str(e),
+        }
+        return render(request, 'rawdocs/document_structured.html', context)
+
+
 
 @login_required
-def export_tables_excel(request, document_id):
-    """
-    Exporte les tableaux d'un document vers Excel
+@csrf_exempt
+@require_POST
+def save_structured_edits(request, document_id):
+    """Sauvegarde des éditions du HTML structuré + score de confiance simple.
+    Payload attendu: { "edits": [ {type: 'text'|'cell', element_id/cell_id, original, modified}, ... ] }
     """
     try:
-        document = RawDocument.objects.get(id=document_id)
-        
-        # Vérifier les permissions
-        if not request.user.is_staff and document.owner != request.user:
-            return JsonResponse({'error': 'Accès non autorisé'}, status=403)
-        
-        # Créer l'extracteur et extraire les tableaux
-        extractor = TableImageExtractor(document.file.path)
-        tables = extractor.extract_tables_with_structure()
-        
-        if not tables:
-            return JsonResponse({'error': 'Aucun tableau trouvé dans ce document'}, status=404)
-        
-        # Créer le fichier Excel
-        response = HttpResponse(
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        filename = f"tableaux_{document.title}_{document.id}.xlsx"
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        
-        # Utiliser un buffer pour créer le fichier Excel
-        import io
-        import pandas as pd
-        
-        buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            for table in tables:
-                sheet_name = f"Page_{table['page']}_Table_{table['table_number']}"
-                # Limiter la longueur du nom de feuille
-                if len(sheet_name) > 31:
-                    sheet_name = f"P{table['page']}_T{table['table_number']}"
-                
-                table['dataframe'].to_excel(writer, sheet_name=sheet_name, index=False)
-        
-        buffer.seek(0)
-        response.write(buffer.getvalue())
-        buffer.close()
-        
-        return response
-        
-    except RawDocument.DoesNotExist:
-        return JsonResponse({'error': 'Document non trouvé'}, status=404)
+        doc = get_object_or_404(RawDocument, id=document_id)
+        if not (request.user.is_staff or (doc.owner and doc.owner == request.user)):
+            return JsonResponse({'success': False, 'message': "Accès refusé"}, status=403)
+
+        try:
+            data = json.loads(request.body.decode('utf-8')) if request.body else {}
+        except Exception:
+            data = {}
+
+        edits = data.get('edits') or []
+        if not isinstance(edits, list) or not edits:
+            return JsonResponse({'success': False, 'message': 'Aucune modification fournie'}, status=400)
+
+        # Stockage côté RawDocument: structured_html_edits (JSONField à créer si besoin) -> fallback: enriched_annotations_json
+        # Pour ne pas casser le modèle, sauvegardons dans enriched_annotations_json sous une clé dédiée
+        store = doc.enriched_annotations_json or {}
+        if not isinstance(store, dict):
+            store = {}
+        store.setdefault('structured_edits', [])
+        store.setdefault('edited_texts', {})
+        store.setdefault('edited_cells', {})
+
+        def conf(o, m):
+            o = (o or '').strip(); m = (m or '').strip()
+            if not o and not m: return 1.0
+            if not o or not m: return 0.0
+            return float(SequenceMatcher(None, o, m).ratio())
+
+        details = []
+        saved_count = 0
+
+        for e in edits:
+            et = e.get('type')
+            orig = e.get('original', '')
+            mod = e.get('modified', '')
+            c = conf(orig, mod)
+            item = { 'type': et, 'original': orig, 'modified': mod, 'confidence': round(c, 4) }
+            if et == 'text':
+                eid = str(e.get('element_id') or '')
+                item['element_id'] = eid
+                if eid:
+                    store['edited_texts'][eid] = { 'original': orig, 'modified': mod, 'confidence': c }
+                    saved_count += 1
+            elif et == 'cell':
+                cid = str(e.get('cell_id') or '')
+                item['cell_id'] = cid
+                if cid:
+                    store['edited_cells'][cid] = { 'original': orig, 'modified': mod, 'confidence': c }
+                    saved_count += 1
+            else:
+                item['warning'] = 'Unknown edit type'
+            store['structured_edits'].append(item)
+            details.append(item)
+
+        doc.enriched_annotations_json = store
+        doc.save(update_fields=['enriched_annotations_json'])
+
+        avg = round(sum(d['confidence'] for d in details if 'confidence' in d) / max(1, len(details)), 4)
+
+        return JsonResponse({ 'success': True, 'saved_count': saved_count, 'avg_confidence': avg, 'details': details })
+
     except Exception as e:
-        return JsonResponse({'error': f'Erreur lors de l\'export: {str(e)}'}, status=500)
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
 
 @login_required
 def document_detail(request, document_id):
@@ -1691,8 +1761,9 @@ def annotate_document(request, doc_id):
         AnnotationType.FILE_TYPE,
     }
 
-    # Show all types so newly created custom types are available immediately
-    annotation_types = AnnotationType.objects.all().order_by('display_name')
+    base_qs = AnnotationType.objects.filter(name__in=list(whitelist))
+    used_qs = AnnotationType.objects.filter(id__in=used_type_ids)
+    annotation_types = (base_qs | used_qs).distinct().order_by('display_name')
 
     return render(request, 'rawdocs/annotate_document.html', {
         'document': document,
@@ -2842,3 +2913,396 @@ def save_document_json_devmetier(request, doc_id):
     except Exception as e:
         print(f"❌ Erreur sauvegarde JSON document {doc_id}: {e}")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+
+@login_required
+@require_POST
+def mistral_suggest_annotations(request, page_id):
+    """
+    Endpoint API pour suggérer des annotations à l'aide de Mistral AI
+    Cette fonction utilise l'API Mistral pour analyser le texte d'une page
+    et générer des suggestions d'entités à annoter
+    
+    Si un document_id est fourni dans le corps de la requête et que le page_id est fictif (1),
+    nous utilisons le document_id pour trouver la première page non annotée
+    """
+    from .annotation_utils import call_mistral_annotation  # Import ici pour éviter les imports circulaires
+    from .models import DocumentPage, Annotation, AnnotationType, Document
+
+    try:
+        # Vérifier si nous avons reçu un document_id dans le corps de la requête
+        data = json.loads(request.body.decode('utf-8')) if request.body else {}
+        document_id = data.get('document_id')
+        
+        # Si nous avons un document_id et que le page_id est l'ID fictif (1)
+        if document_id and page_id == 1:
+            # Récupérer le document
+            document = get_object_or_404(Document, id=document_id)
+            
+            # Vérifier les permissions
+            if not document.is_accessible_by(request.user):
+                return JsonResponse({'success': False, 'error': 'Accès non autorisé'}, status=403)
+            
+            # Trouver la première page du document
+            page = DocumentPage.objects.filter(document=document).order_by('page_number').first()
+            
+            if not page:
+                return JsonResponse({'success': False, 'error': 'Aucune page trouvée pour ce document'}, status=404)
+            
+        else:
+            # Récupérer la page directement par son ID
+            page = get_object_or_404(DocumentPage, id=page_id)
+            document = page.document
+            
+            # Vérifier les permissions
+            if not document.is_accessible_by(request.user):
+                return JsonResponse({'success': False, 'error': 'Accès non autorisé'}, status=403)
+        
+        # Supprimer les annotations existantes sur cette page
+        Annotation.objects.filter(page=page).delete()
+        
+        # Obtenir le texte de la page
+        page_text = page.cleaned_text or ""
+        
+        # Appeler l'API Mistral pour obtenir des suggestions d'annotations
+        annotations_data = call_mistral_annotation(page_text, page.page_number)
+        
+        # Créer les nouvelles annotations basées sur les suggestions de Mistral
+        created_count = 0
+        for ann_data in annotations_data:
+            # Vérifier que les données sont valides
+            if not (isinstance(ann_data, dict) and 'text' in ann_data and 'type' in ann_data and 
+                   'start_pos' in ann_data and 'end_pos' in ann_data):
+                continue
+            
+            # Récupérer ou créer le type d'annotation
+            ann_type_name = ann_data['type'].lower().strip()
+            ann_type, created = AnnotationType.objects.get_or_create(
+                name=ann_type_name,
+                defaults={
+                    'color': '#' + ''.join([format(hash(ann_type_name) % 256, '02x') for _ in range(3)]),
+                    'description': f"Type détecté par Mistral AI: {ann_type_name}"
+                }
+            )
+            
+            # Créer l'annotation
+            annotation = Annotation.objects.create(
+                page=page,
+                text=ann_data['text'],
+                start_pos=ann_data['start_pos'],
+                end_pos=ann_data['end_pos'],
+                annotation_type=ann_type,
+                confidence=ann_data.get('confidence', 0.75),
+                created_by=request.user,
+                is_ai_generated=True,
+                ai_reasoning=ann_data.get('reasoning', 'Détecté par Mistral AI')
+            )
+            created_count += 1
+        
+        # Construire l'URL de redirection vers la page d'annotation
+        redirect_url = f"/rawdocs/annotate/{document.id}/?page={page.page_number}"
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Mistral AI a suggéré {created_count} annotations',
+            'annotations_count': created_count,
+            'redirect_url': redirect_url
+        })
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de la suggestion d'annotations avec Mistral: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@require_POST
+def test_mistral_page(request):
+    """
+    Page de test pour le fonctionnement de Mistral Annotation
+    """
+    return render(request, 'rawdocs/test_mistral.html')
+
+
+def mistral_direct_analysis(request):
+    """
+    Analyse directe d'un texte avec Mistral AI sans l'associer à une page de document
+    Utilisé principalement pour la page de test
+    """
+    import json
+    import traceback
+    from django.http import JsonResponse
+    from .annotation_utils import call_mistral_annotation
+    
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Méthode HTTP non autorisée'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        text = data.get('text')
+        page_number = data.get('page_number', 1)
+        
+        if not text:
+            return JsonResponse({'success': False, 'error': 'Aucun texte fourni'}, status=400)
+        
+        # Limiter la taille du texte pour éviter les abus
+        if len(text) > 10000:
+            return JsonResponse({'success': False, 'error': 'Texte trop long (max 10000 caractères)'}, status=400)
+        
+        # Appel à l'API Mistral
+        print(f"🔍 Analyse directe Mistral d'un texte de {len(text)} caractères")
+        annotations_data = call_mistral_annotation(text, page_number)
+        
+        return JsonResponse({
+            'success': True,
+            'annotations': annotations_data,
+            'text_length': len(text)
+        })
+        
+    except Exception as e:
+        traceback.print_exc()
+        print(f"❌ Exception lors de l'analyse Mistral: {e}")
+        return JsonResponse({
+            'success': False, 
+            'error': f"Une erreur est survenue lors de l'analyse: {str(e)}"
+        }, status=500)
+
+def mistral_analyze_document(request, document_id):
+    """
+    Analyse un document avec Mistral AI pour proposer des types d'entités d'annotation pertinents
+    en fonction du contexte et de la langue du document.
+    """
+    from .annotation_utils import analyze_document_context_with_mistral
+    import traceback
+    
+    # Débogage: Ajouter des logs au début
+    print(f"🔵 API mistral_analyze_document appelée pour document_id={document_id}")
+    print(f"🔵 Méthode: {request.method}, Utilisateur: {request.user}")
+    
+    # Pour débogage: Retourner un succès simulé pour tester la redirection
+    if request.GET.get('debug') == '1':
+        print("🟠 MODE DEBUG: Retour d'une réponse simulée")
+        first_page = 1
+        return JsonResponse({
+            'success': True,
+            'message': "Test de redirection réussi",
+            'document_domain': "Test",
+            'document_language': "fr",
+            'entity_types': [
+                {"id": 1, "name": "test", "display_name": "Test", "description": "Entité de test", "color": "#FF5733"}
+            ],
+            'entity_types_count': 1,
+            'annotation_url': f"/rawdocs/annotate_document/{document_id}/?page=1"
+        })
+    
+    try:
+        # Récupérer le document
+        document = get_object_or_404(RawDocument, id=document_id)
+        
+        # Vérifier que l'utilisateur a accès au document
+        if not document.is_accessible_by(request.user):
+            print(f"🔴 Accès refusé: L'utilisateur {request.user} n'a pas accès au document {document_id}")
+            return JsonResponse({
+                'success': False, 
+                'error': 'Vous n\'avez pas l\'autorisation d\'accéder à ce document'
+            }, status=403)
+        
+        # Log pour débuguer
+        print(f"🔍 Début analyse Mistral du document ID={document_id}")
+        
+        # Récupérer les pages du document pour l'analyse
+        pages = DocumentPage.objects.filter(document=document).order_by('page_number')
+        
+        if not pages.exists():
+            return JsonResponse({
+                'success': False, 
+                'error': 'Aucune page trouvée pour ce document'
+            }, status=404)
+        
+        # Préparer un échantillon de texte pour l'analyse (premières pages)
+        document_text = ""
+        for page in pages[:5]:  # Limiter à 5 pages pour l'analyse
+            document_text += page.cleaned_text + "\n\n"
+            if len(document_text) > 15000:  # Limiter la taille
+                document_text = document_text[:15000]
+                break
+                
+        # Toujours détecter automatiquement la langue du document
+        # et utiliser cette langue pour les annotations
+        detect_document_language = True
+        annotation_language = None  # Pas de langue forcée, on utilisera celle du document
+        
+        # Détecter la langue avec une méthode qui prend en charge de nombreuses langues
+        
+        # Marqueurs pour un large éventail de langues (ajout de langues européennes et mondiales)
+        language_markers = {
+            # Langues latines
+            'fr': ["le", "la", "les", "des", "pour", "avec", "par", "dans", "ce", "cette", "ces", "est", "sont", "était", "qui", "que"],
+            'es': ["el", "la", "los", "las", "de", "en", "para", "con", "por", "es", "son", "fue", "que", "pero", "como", "cuando"],
+            'it': ["il", "la", "i", "le", "di", "in", "per", "con", "da", "è", "sono", "era", "che", "ma", "come", "quando"],
+            'pt': ["o", "a", "os", "as", "de", "em", "para", "com", "por", "é", "são", "foi", "que", "mas", "como", "quando"],
+            'ro': ["un", "o", "și", "în", "la", "cu", "de", "pe", "pentru", "este", "sunt", "care", "că", "dar", "acest", "acesta"],
+            
+            # Langues germaniques
+            'en': ["the", "and", "of", "in", "to", "for", "with", "by", "this", "that", "is", "are", "was", "were", "which", "who"],
+            'de': ["der", "die", "das", "und", "in", "mit", "für", "von", "zu", "ist", "sind", "war", "wenn", "aber", "oder", "wie"],
+            'nl': ["de", "het", "een", "in", "op", "voor", "met", "door", "en", "is", "zijn", "was", "waren", "die", "dat", "als"],
+            'sv': ["en", "ett", "och", "att", "det", "är", "som", "för", "med", "på", "av", "den", "till", "inte", "har", "från"],
+            
+            # Langues slaves
+            'bg': ["на", "и", "за", "се", "от", "да", "в", "с", "по", "е", "са", "като", "че", "това", "тези", "този"],
+            'ru': ["и", "в", "не", "на", "с", "по", "для", "от", "из", "о", "что", "это", "этот", "как", "так", "когда"],
+            'pl': ["w", "i", "z", "na", "do", "się", "jest", "to", "że", "dla", "nie", "jak", "przez", "od", "po", "który"],
+            'cs': ["a", "v", "na", "s", "z", "do", "je", "to", "že", "pro", "jako", "když", "od", "nebo", "také", "který"],
+            
+            # Autres langues européennes
+            'el': ["και", "του", "της", "τη", "σε", "από", "με", "για", "ο", "η", "το", "οι", "τα", "είναι", "που", "αυτό"],
+            'hu': ["a", "az", "és", "van", "egy", "hogy", "nem", "ez", "azt", "mint", "csak", "de", "ha", "vagy", "aki", "ami"],
+            'fi': ["ja", "on", "että", "ei", "se", "hän", "ovat", "oli", "kun", "mitä", "tai", "kuin", "mutta", "vain", "jos", "myös"]
+        }
+        
+        # Mapper le code de langue à un nom plus explicite pour les logs
+        lang_names = {
+            'fr': 'Français', 
+            'en': 'Anglais',
+            'de': 'Allemand',
+            'es': 'Espagnol',
+            'it': 'Italien',
+            'pt': 'Portugais'
+        }
+        
+        # Préparer le texte pour la détection
+        document_text_lower = " " + document_text.lower() + " "
+        
+        # Compter les occurrences de chaque marqueur de langue
+        language_counts = {}
+        for lang, markers in language_markers.items():
+            count = sum(document_text_lower.count(f" {marker} ") for marker in markers)
+            language_counts[lang] = count
+        
+        # Mapper le code de langue à un nom plus explicite pour les logs
+        lang_names = {
+            'fr': 'Français', 
+            'en': 'Anglais',
+            'de': 'Allemand',
+            'es': 'Espagnol',
+            'it': 'Italien',
+            'pt': 'Portugais',
+            'ro': 'Roumain',
+            'nl': 'Néerlandais',
+            'sv': 'Suédois',
+            'bg': 'Bulgare',
+            'ru': 'Russe',
+            'pl': 'Polonais',
+            'cs': 'Tchèque',
+            'el': 'Grec',
+            'hu': 'Hongrois',
+            'fi': 'Finnois'
+        }
+        
+        # Détection automatique de la langue du document
+        document_language = "fr"  # Valeur par défaut
+        
+        if detect_document_language:
+            # Trouver la langue avec le plus de marqueurs
+            if language_counts:
+                detected_lang = max(language_counts, key=language_counts.get)
+                lang_count = language_counts[detected_lang]
+                
+                # Vérifier si la détection est fiable (au moins 3 marqueurs trouvés)
+                if lang_count >= 3:
+                    document_language = detected_lang
+                    lang_name = lang_names.get(document_language, f'Autre ({document_language})')
+                    print(f"🔍 Langue du document détectée: {lang_name} ({document_language}) avec {lang_count} marqueurs")
+                else:
+                    # Pas assez de marqueurs, utiliser la langue par défaut
+                    document_language = "fr"
+                    print(f"⚠️ Détection de langue peu fiable ({lang_count} marqueurs). Document considéré en français par défaut")
+            else:
+                # Aucun marqueur trouvé, utiliser la langue par défaut
+                document_language = "fr"
+                print("⚠️ Aucun marqueur de langue trouvé. Document considéré en français par défaut")
+        
+        # Toujours utiliser la langue du document pour les annotations
+        language = document_language
+        print(f"🔄 Utilisation automatique de la langue du document pour les annotations: {language}")
+            
+        # Appeler Mistral pour l'analyse contextuelle
+        print(f"📝 Appel à Mistral pour analyse document (langue: {language})")
+        context_analysis = analyze_document_context_with_mistral(document_text, language)
+        
+        if "error" in context_analysis and not context_analysis.get("entity_types"):
+            print(f"❌ Erreur lors de l'analyse Mistral: {context_analysis['error']}")
+            return JsonResponse({
+                'success': False, 
+                'error': f"Erreur lors de l'analyse: {context_analysis['error']}"
+            }, status=500)
+        
+        # Traiter les types d'entités proposés par Mistral
+        entity_types = context_analysis.get("entity_types", [])
+        print(f"✅ Mistral a proposé {len(entity_types)} types d'entités")
+        
+        # Créer ou mettre à jour les types d'annotation dans la base de données
+        created_types = []
+        for entity_type in entity_types:
+            name = entity_type.get("name", "").lower().strip()
+            display_name = entity_type.get("display_name", name).strip()
+            description = entity_type.get("description", "").strip()
+            
+            if not name:
+                continue
+                
+            # Générer une couleur aléatoire basée sur le nom (pour être cohérent)
+            color = '#' + ''.join([format(hash(name + str(i)) % 256, '02x') for i in range(3)])
+            
+            # Créer ou mettre à jour le type d'annotation
+            ann_type, created = AnnotationType.objects.get_or_create(
+                name=name,
+                defaults={
+                    'display_name': display_name,
+                    'description': description,
+                    'color': color
+                }
+            )
+            
+            # Mettre à jour si le type existe déjà
+            if not created:
+                ann_type.description = description
+                ann_type.display_name = display_name
+                ann_type.save()
+                
+            created_types.append({
+                "id": ann_type.id,
+                "name": ann_type.name,
+                "display_name": ann_type.display_name,
+                "description": ann_type.description,
+                "color": ann_type.color
+            })
+        
+        # Construire l'URL de redirection
+        first_page = pages.first()
+        annotation_url = f"/rawdocs/annotate/{document.id}/?page={first_page.page_number}"
+        
+        # Obtenir le nom d'affichage de la langue
+        detected_lang_name = lang_names.get(document_language, document_language)
+        
+        # Retourner la réponse
+        return JsonResponse({
+            'success': True,
+            'message': f"Mistral a identifié {len(created_types)} types d'entités pour ce document",
+            'document_domain': context_analysis.get('document_domain', 'Non spécifié'),
+            'document_language': document_language,  # Code ISO de la langue du document (fr, en, de, etc.)
+            'displayed_language': detected_lang_name,  # Nom de la langue pour affichage (Français, Anglais, etc.)
+            'entity_types': created_types,
+            'entity_types_count': len(created_types),
+            'annotation_url': annotation_url
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"❌ Exception lors de l'analyse Mistral: {e}")
+        return JsonResponse({
+            'success': False, 
+            'error': f"Une erreur est survenue: {str(e)}"
+        }, status=500)
