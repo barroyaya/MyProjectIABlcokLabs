@@ -47,7 +47,6 @@ except ImportError:
 # Docling (optionnel)
 try:
     import docling  # IBM Project Docling
-
     DOCLING_AVAILABLE = True
 except ImportError:
     DOCLING_AVAILABLE = False
@@ -83,7 +82,6 @@ except ImportError:
 # OCR (optionnel)
 try:
     import pytesseract
-
     OCR_AVAILABLE = True
 except ImportError:
     OCR_AVAILABLE = False
@@ -173,16 +171,16 @@ class UltraAdvancedPDFExtractor:
             'line_height_tolerance': 5.0,
             'sentence_break_threshold': 10.0,
             # Nouveau: contrôle des espaces entre spans (évite les lettres séparées)
-            'text_gap_factor': 1.6,  # agressif: gap ~160% de la taille de police
-            'single_char_no_space_factor': 3.0,  # agressif: évite "T H E"
+            'text_gap_factor': 1.6,                  # agressif: gap ~160% de la taille de police
+            'single_char_no_space_factor': 3.0,      # agressif: évite "T H E"
             # Fusion agressive par ligne
             'line_merge_vertical_tolerance_ratio': 0.006,  # 0.6% de la hauteur de page
-            'line_merge_min_band_tol_px': 3.0,  # min 3px de tolérance verticale
-            'line_merge_gap_factor': 1.8,  # seuil de fusion horizontal plus grand
+            'line_merge_min_band_tol_px': 3.0,             # min 3px de tolérance verticale
+            'line_merge_gap_factor': 1.8,                  # seuil de fusion horizontal plus grand
             # Paramètres spécifiques au footer (bas de page)
-            'footer_height_ratio': 0.12,  # 12% bas de page considéré footer
-            'footer_overlap_threshold': 0.4,  # plus strict que global (0.4)
-            'footer_keep_highest_conf': True  # garder le texte avec meilleure confiance
+            'footer_height_ratio': 0.12,         # 12% bas de page considéré footer
+            'footer_overlap_threshold': 0.4,     # plus strict que global (0.4)
+            'footer_keep_highest_conf': True     # garder le texte avec meilleure confiance
         }
 
         # Modèles pré-entraînés (simulés)
@@ -372,8 +370,7 @@ class UltraAdvancedPDFExtractor:
                         ocr_text = pytesseract.image_to_string(image)
                         if ocr_text and ocr_text.strip():
                             # Fabriquer un dict minimal compatible avec pipeline
-                            return {"blocks": [{"lines": [{"spans": [
-                                {"text": ocr_text, "bbox": [0, 0, image.shape[1], image.shape[0]], "size": 12}]}]}]}
+                            return {"blocks": [{"lines": [{"spans": [{"text": ocr_text, "bbox": [0,0,image.shape[1], image.shape[0]], "size": 12}]}]}]}
             except Exception:
                 pass
             return {"blocks": []}
@@ -494,8 +491,7 @@ class UltraAdvancedPDFExtractor:
                         # Known tuple shape: (items, color, fill, width, ...) varies by version
                         for item in drawing:
                             # try to pick first rect-like value
-                            if hasattr(item, 'x0') and hasattr(item, 'y0') and hasattr(item, 'width') and hasattr(item,
-                                                                                                                  'height'):
+                            if hasattr(item, 'x0') and hasattr(item, 'y0') and hasattr(item, 'width') and hasattr(item, 'height'):
                                 rect = item
                                 break
                         # colors/width often not directly available; leave None/defaults
@@ -562,10 +558,8 @@ class UltraAdvancedPDFExtractor:
 
             # Heuristique de détection 'lettres isolées': trop de clusters unitaires ou peu de caractères par cluster
             total_clusters = max(1, len(clustered_spans))
-            singleton_clusters = sum(1 for spans in clustered_spans.values() if
-                                     len(spans) == 1 and len((spans[0].get('text', '') or '').strip()) <= 2)
-            total_chars = sum(
-                len((s.get('text', '') or '').strip()) for spans in clustered_spans.values() for s in spans)
+            singleton_clusters = sum(1 for spans in clustered_spans.values() if len(spans) == 1 and len((spans[0].get('text','') or '').strip()) <= 2)
+            total_chars = sum(len((s.get('text','') or '').strip()) for spans in clustered_spans.values() for s in spans)
             avg_chars_per_cluster = total_chars / total_clusters
 
             fragmented = (singleton_clusters / total_clusters) > 0.5 or avg_chars_per_cluster < 5
@@ -600,12 +594,10 @@ class UltraAdvancedPDFExtractor:
                 font_size = span.get('size', 12)
                 text = span.get('text', '').strip()
                 is_end_of_sentence = 1.0 if re.search(r'[.!?]$', text) else 0.0
-                features.append(
-                    [bbox[0], bbox[1], bbox[2] - bbox[0], bbox[3] - bbox[1], font_size, len(text), is_end_of_sentence])
+                features.append([bbox[0], bbox[1], bbox[2] - bbox[0], bbox[3] - bbox[1], font_size, len(text), is_end_of_sentence])
             scaler = StandardScaler()
             features_scaled = scaler.fit_transform(features)
-            clustering = DBSCAN(eps=self.config['text_clustering_eps'] / 100, min_samples=1, metric='euclidean').fit(
-                features_scaled)
+            clustering = DBSCAN(eps=self.config['text_clustering_eps'] / 100, min_samples=1, metric='euclidean').fit(features_scaled)
             clustered = defaultdict(list)
             for i, label in enumerate(clustering.labels_):
                 if label != -1:
@@ -617,7 +609,7 @@ class UltraAdvancedPDFExtractor:
                 prev_y = cluster_spans[0]['bbox'][1]
                 for span in sorted(cluster_spans, key=lambda s: (s['bbox'][1], s['bbox'][0])):
                     if (abs(span['bbox'][1] - prev_y) > self.config['sentence_break_threshold'] or
-                            re.search(r'[.!?]$', span.get('text', ''))):
+                        re.search(r'[.!?]$', span.get('text', ''))):
                         if current_cluster:
                             adjusted_clusters[len(adjusted_clusters)] = current_cluster
                             current_cluster = [span]
@@ -632,9 +624,8 @@ class UltraAdvancedPDFExtractor:
         except Exception as e:
             logger.error(f"Erreur clustering ML: {e}")
             return {0: spans}
-
-    def _create_text_block_from_spans(self, spans: List[Dict], page_num: int, page_width: float, page_height: float) -> \
-    Optional[Dict]:
+    
+    def _create_text_block_from_spans(self, spans: List[Dict], page_num: int, page_width: float, page_height: float) -> Optional[Dict]:
         """Créer un bloc de texte cohérent avec préservation des phrases et fallback anti-fragmentation."""
         if not spans:
             return None
@@ -662,10 +653,9 @@ class UltraAdvancedPDFExtractor:
             prev_line_text = ''
             for i, line_spans in enumerate(lines):
                 # Si la ligne est ultra fragmentée en caractères unitaires, concaténer sans ajouter d'espaces artificiels
-                single_chars = sum(1 for s in line_spans if len((s.get('text', '') or '').strip()) == 1)
+                single_chars = sum(1 for s in line_spans if len((s.get('text','') or '').strip()) == 1)
                 if len(line_spans) > 0 and (single_chars / len(line_spans)) > 0.6:
-                    line_text = ''.join((s.get('text', '') or '') for s in
-                                        sorted(line_spans, key=lambda s: s.get('bbox', [0, 0, 0, 0])[0]))
+                    line_text = ''.join((s.get('text','') or '') for s in sorted(line_spans, key=lambda s: s.get('bbox',[0,0,0,0])[0]))
                 else:
                     line_text = self._join_spans_with_spacing(line_spans).strip()
 
@@ -692,19 +682,17 @@ class UltraAdvancedPDFExtractor:
                 'position': {
                     'x': float(min_x), 'y': float(min_y), 'width': float(max_x - min_x), 'height': float(max_y - min_y),
                     'x_percent': (min_x / page_width) * 100, 'y_percent': (min_y / page_height) * 100,
-                    'width_percent': ((max_x - min_x) / page_width) * 100,
-                    'height_percent': ((max_y - min_y) / page_height) * 100
+                    'width_percent': ((max_x - min_x) / page_width) * 100, 'height_percent': ((max_y - min_y) / page_height) * 100
                 },
-                'style': style_analysis, 'spans_count': len(spans),
-                'confidence': self._calculate_text_confidence(spans, combined_text)
+                'style': style_analysis, 'spans_count': len(spans), 'confidence': self._calculate_text_confidence(spans, combined_text)
             }
             return text_block
         except Exception as e:
             logger.error(f"Erreur création bloc texte: {e}")
             return None
+    
 
-    def _detect_tables_geometric_analysis(self, text_blocks: List[Dict], shapes: List[Dict], page_width: float,
-                                          page_height: float) -> List[Dict]:
+    def _detect_tables_geometric_analysis(self, text_blocks: List[Dict], shapes: List[Dict], page_width: float, page_height: float) -> List[Dict]:
         """Détection avancée de tableaux par analyse géométrique avec intégration texte"""
         tables = []
         try:
@@ -726,6 +714,7 @@ class UltraAdvancedPDFExtractor:
         except Exception as e:
             logger.error(f"Erreur détection tableaux géométrique: {e}")
             return []
+        
 
     def _find_adjacent_text(self, table: Dict, text_blocks: List[Dict]) -> Optional[str]:
         """Trouver le texte adjacent à un tableau"""
@@ -739,7 +728,7 @@ class UltraAdvancedPDFExtractor:
                 if distance < min_distance:
                     min_distance = distance
                     closest_text = block['text']
-        return closest_text
+        return closest_text    
 
     def _detect_tables_from_lines(self, shapes: List[Dict], page_width: float, page_height: float) -> List[Dict]:
         """Détection de tableaux à partir des lignes tracées"""
@@ -882,9 +871,7 @@ class UltraAdvancedPDFExtractor:
                 for cnt in contours:
                     x, y, w, h = cv2.boundingRect(cnt)
                     if w > 40 and h > 8:
-                        analysis['text_regions'].append(
-                            {'position': {'x': x, 'y': y, 'width': w, 'height': h}, 'page': page_num,
-                             'type': 'text_region'})
+                        analysis['text_regions'].append({'position': {'x': x, 'y': y, 'width': w, 'height': h}, 'page': page_num, 'type': 'text_region'})
             except Exception:
                 pass
 
@@ -1551,23 +1538,19 @@ class UltraAdvancedPDFExtractor:
     def _footer_box_key(self, pos: Dict, page_width: float, page_height: float) -> str:
         # Regroupe par zones horizontales pour éviter doublons gauche/centre/droite
         try:
-            x = float(pos.get('x', 0));
-            y = float(pos.get('y', 0))
-            w = float(pos.get('width', 0));
-            h = float(pos.get('height', 0))
+            x = float(pos.get('x', 0)); y = float(pos.get('y', 0))
+            w = float(pos.get('width', 0)); h = float(pos.get('height', 0))
             # bucketiser X en 3 colonnes: gauche, centre, droite
             col = 'L' if x < page_width * 0.33 else ('C' if x < page_width * 0.66 else 'R')
             # bucketiser Y en 2 bandes proches du bas
             band = 'B1' if y >= page_height * 0.92 else 'B2'
             # Normaliser légèrement la largeur/hauteur
-            wb = int(round(w / 10.0));
-            hb = int(round(h / 5.0))
+            wb = int(round(w / 10.0)); hb = int(round(h / 5.0))
             return f"{col}-{band}-{wb}x{hb}"
         except Exception:
             return "UNK"
 
-    def _deduplicate_footer_text_elements(self, elements: List[Dict], page_width: float, page_height: float) -> List[
-        Dict]:
+    def _deduplicate_footer_text_elements(self, elements: List[Dict], page_width: float, page_height: float) -> List[Dict]:
         """Supprime les doublons/chevauchements agressivement dans le footer en gardant le plus fiable."""
         try:
             texts = [e for e in elements if e.get('type') == 'text']
@@ -1590,13 +1573,11 @@ class UltraAdvancedPDFExtractor:
                 # Trier par confiance décroissante pour garder les meilleurs
                 group_sorted = sorted(group, key=lambda e: float(e.get('confidence', 0.5)), reverse=True)
                 kept: List[Dict] = []
-                boxes: List[Tuple[float, float, float, float]] = []
+                boxes: List[Tuple[float,float,float,float]] = []
                 for e in group_sorted:
                     pos = e.get('position', {})
-                    x1 = float(pos.get('x', 0));
-                    y1 = float(pos.get('y', 0))
-                    x2 = x1 + float(pos.get('width', 0));
-                    y2 = y1 + float(pos.get('height', 0))
+                    x1 = float(pos.get('x', 0)); y1 = float(pos.get('y', 0))
+                    x2 = x1 + float(pos.get('width', 0)); y2 = y1 + float(pos.get('height', 0))
                     # Vérifier chevauchement avec ceux déjà gardés
                     too_much = False
                     for (bx1, by1, bx2, by2) in boxes:
@@ -1675,8 +1656,7 @@ class UltraAdvancedPDFExtractor:
                     gap_threshold = max(0.5, prev_size * float(self.config.get('text_gap_factor', 0.95)))
                     # Si les deux spans ne contiennent qu'un seul caractère: seuil plus grand (évite "T H E")
                     if len(prev_text.strip()) == 1 and len(t.strip()) == 1:
-                        gap_threshold = max(gap_threshold,
-                                            prev_size * float(self.config.get('single_char_no_space_factor', 1.6)))
+                        gap_threshold = max(gap_threshold, prev_size * float(self.config.get('single_char_no_space_factor', 1.6)))
                     # Insérer un espace uniquement si le gap dépasse clairement le seuil
                     if gap > gap_threshold and not (line_text.endswith(' ') or t.startswith(' ')):
                         line_text += ' '
@@ -1815,8 +1795,7 @@ class UltraAdvancedPDFExtractor:
                 return elements
 
             # Grouper par bande horizontale (même ligne)
-            band_tol = max(float(self.config.get('line_merge_min_band_tol_px', 3.0)), page_height * float(
-                self.config.get('line_merge_vertical_tolerance_ratio', 0.006)))  # tolérance verticale agressive
+            band_tol = max(float(self.config.get('line_merge_min_band_tol_px', 3.0)), page_height * float(self.config.get('line_merge_vertical_tolerance_ratio', 0.006)))  # tolérance verticale agressive
             bands: List[List[Dict]] = []
             for t in sorted(texts, key=lambda e: float(e.get('position', {}).get('y', 0))):
                 y = float(t.get('position', {}).get('y', 0))
@@ -1841,10 +1820,8 @@ class UltraAdvancedPDFExtractor:
                         current_group = [t]
                         continue
                     prev = current_group[-1]
-                    px = float(prev['position']['x']);
-                    pw = float(prev['position']['width'])
-                    x = float(t['position']['x']);
-                    w = float(t['position']['width'])
+                    px = float(prev['position']['x']); pw = float(prev['position']['width'])
+                    x = float(t['position']['x']); w = float(t['position']['width'])
                     gap = x - (px + pw)
                     # seuil dynamique basé sur hauteur/size moyenne
                     size_prev = float(prev.get('style', {}).get('size', 12) or 12)
@@ -1857,8 +1834,7 @@ class UltraAdvancedPDFExtractor:
                     prev_txt = (prev.get('text', '') or '').strip()
                     cur_txt = (t.get('text', '') or '').strip()
                     if len(prev_txt) == 1 and len(cur_txt) == 1:
-                        gap_threshold = max(gap_threshold,
-                                            size_avg * float(self.config.get('single_char_no_space_factor', 3.0)))
+                        gap_threshold = max(gap_threshold, size_avg * float(self.config.get('single_char_no_space_factor', 3.0)))
                     if gap <= gap_threshold:
                         current_group.append(t)
                     else:
@@ -1891,10 +1867,8 @@ class UltraAdvancedPDFExtractor:
             })
         text = self._join_spans_with_spacing(spans_like)
         # Bounding box englobante
-        xs = [s['bbox'][0] for s in spans_like];
-        ys = [s['bbox'][1] for s in spans_like]
-        x2s = [s['bbox'][2] for s in spans_like];
-        y2s = [s['bbox'][3] for s in spans_like]
+        xs = [s['bbox'][0] for s in spans_like]; ys = [s['bbox'][1] for s in spans_like]
+        x2s = [s['bbox'][2] for s in spans_like]; y2s = [s['bbox'][3] for s in spans_like]
         min_x, min_y, max_x, max_y = min(xs), min(ys), max(x2s), max(y2s)
         # Style dominant
         style = self._analyze_dominant_style([{'size': s['size']} for s in spans_like])
@@ -1913,8 +1887,7 @@ class UltraAdvancedPDFExtractor:
                 'x': float(min_x), 'y': float(min_y),
                 'width': float(max_x - min_x), 'height': float(max_y - min_y),
                 'x_percent': (min_x / page_width) * 100, 'y_percent': (min_y / page_height) * 100,
-                'width_percent': ((max_x - min_x) / page_width) * 100,
-                'height_percent': ((max_y - min_y) / page_height) * 100
+                'width_percent': ((max_x - min_x) / page_width) * 100, 'height_percent': ((max_y - min_y) / page_height) * 100
             },
             'style': style,
             'confidence': conf
@@ -1977,8 +1950,7 @@ class UltraAdvancedPDFExtractor:
                     if isinstance(parsed, dict):
                         text = parsed.get('text', '') or parsed.get('content', '') or ''
                         # Pages
-                        pgs = parsed.get('pages') or parsed.get('document', {}).get('pages') if isinstance(
-                            parsed.get('document'), dict) else []
+                        pgs = parsed.get('pages') or parsed.get('document', {}).get('pages') if isinstance(parsed.get('document'), dict) else []
                         for i, p in enumerate(pgs or []):
                             pages.append({
                                 'page_number': i + 1,
@@ -2047,7 +2019,7 @@ class UltraAdvancedPDFExtractor:
         return []
 
     def _create_table_from_aligned_text(self, table_rows: List[List[Dict]], page_width: float, page_height: float) -> \
-            Optional[Dict]:
+    Optional[Dict]:
         return None
 
     def _detect_layout_regions(self, image: np.ndarray) -> List[Dict]:
@@ -2099,20 +2071,20 @@ class UltraAdvancedPDFExtractor:
         """
         if not text:
             return text
-
+        
         try:
             import re
-
+            
             # Étape 1: Identifier et corriger les mots coupés avec tiret
             # Pattern pour détecter: mot-\n(espace*)mot
             text = re.sub(r'(\w+)-\s*\n\s*(\w+)', self._handle_hyphenated_word, text)
-
+            
             # Étape 2: Gérer les mots coupés sans tiret (détection intelligente)
             text = re.sub(r'(\w+)\s*\n\s*(\w+)', self._handle_potential_split_word, text)
-
+            
             # Étape 3: Préserver les vrais paragraphes (double saut de ligne)
             paragraphs = re.split(r'\n\s*\n', text)
-
+            
             # Étape 4: Nettoyer chaque paragraphe individuellement
             cleaned_paragraphs = []
             for para in paragraphs:
@@ -2123,10 +2095,10 @@ class UltraAdvancedPDFExtractor:
                 para = para.strip()
                 if para:
                     cleaned_paragraphs.append(para)
-
+            
             # Rejoindre les paragraphes avec double saut de ligne
             return '\n\n'.join(cleaned_paragraphs)
-
+            
         except Exception as e:
             logger.warning(f"Erreur normalisation avancée: {e}")
             return text
@@ -2227,8 +2199,7 @@ class UltraAdvancedPDFExtractor:
     def _generate_ultra_faithful_page_html(self, page_num: int, elements: List[Dict], validated_content: Dict) -> str:
         width = 900
         height = 1200
-        parts = [
-            f'<div class="ultra-page-container" data-page="{page_num}" style="width:{width}px;height:{height}px;">']
+        parts = [f'<div class="ultra-page-container" data-page="{page_num}" style="width:{width}px;height:{height}px;">']
         for el in elements:
             try:
                 pos = el.get('position', {}) if isinstance(el, dict) else {}
@@ -2280,6 +2251,7 @@ class UltraAdvancedPDFExtractor:
 
     def _is_valid_table_pattern(self, pattern: Dict) -> bool:
         return False
+    
 
     def _handle_hyphenated_word(self, match) -> str:
         """
@@ -2288,11 +2260,11 @@ class UltraAdvancedPDFExtractor:
         """
         part1 = match.group(1)
         part2 = match.group(2)
-
+        
         # Reconstituer le mot potentiel
         full_word = part1 + part2
         hyphenated_word = f"{part1}-{part2}"
-
+        
         # Si le mot reconstitué semble valide (heuristique simple)
         # On pourrait utiliser un dictionnaire ou une API de vérification
         if self._is_likely_word(full_word):
@@ -2307,14 +2279,14 @@ class UltraAdvancedPDFExtractor:
         """
         part1 = match.group(1)
         part2 = match.group(2)
-
+        
         # Si part1 se termine par une minuscule et part2 commence par une minuscule
         # C'est probablement un mot coupé
         if part1[-1].islower() and part2[0].islower():
             # Vérifier si c'est la fin d'une phrase
             if not part1[-1] in '.!?':
                 return part1 + part2
-
+        
         # Sinon, garder l'espace
         return f"{part1} {part2}"
 
@@ -2325,11 +2297,11 @@ class UltraAdvancedPDFExtractor:
         # Heuristiques simples
         if len(word) < 2 or len(word) > 30:
             return False
-
+        
         # Vérifier le pattern de voyelles/consonnes
         vowels = set('aeiouAEIOU')
         has_vowel = any(c in vowels for c in word)
-
+        
         return has_vowel
 
     def _cluster_text_spans_improved(self, spans: List[Dict]) -> Dict[int, List[Dict]]:
@@ -2338,14 +2310,14 @@ class UltraAdvancedPDFExtractor:
         """
         if not SKLEARN_AVAILABLE or len(spans) < 2:
             return {0: spans}
-
+        
         try:
             # Préparer les features avec plus de précision spatiale
             features = []
             for span in spans:
                 bbox = span.get('bbox', [0, 0, 0, 0])
                 font_size = span.get('size', 12)
-
+                
                 # Position et dimensions
                 x_start = bbox[0]
                 y_start = bbox[1]
@@ -2353,24 +2325,24 @@ class UltraAdvancedPDFExtractor:
                 y_end = bbox[3]
                 width = x_end - x_start
                 height = y_end - y_start
-
+                
                 # Caractéristiques du texte
                 text = span.get('text', '').strip()
                 text_len = len(text)
                 ends_with_punct = 1.0 if re.search(r'[.!?:;,]$', text) else 0.0
                 starts_with_capital = 1.0 if text and text[0].isupper() else 0.0
-
+                
                 features.append([
                     x_start, y_start, x_end, y_end,
                     width, height,
                     font_size, text_len,
                     ends_with_punct, starts_with_capital
                 ])
-
+            
             # Normaliser les features
             scaler = StandardScaler()
             features_scaled = scaler.fit_transform(features)
-
+            
             # DBSCAN avec paramètres ajustés pour éviter la superposition
             eps_value = self.config.get('text_clustering_eps', 0.3)
             clustering = DBSCAN(
@@ -2378,33 +2350,33 @@ class UltraAdvancedPDFExtractor:
                 min_samples=1,
                 metric='euclidean'
             ).fit(features_scaled)
-
+            
             # Organiser par clusters et vérifier les superpositions
             clustered = defaultdict(list)
             for i, label in enumerate(clustering.labels_):
                 if label != -1:
                     clustered[label].append(spans[i])
-
+            
             # Post-traitement: séparer les éléments qui se superposent
             final_clusters = {}
             cluster_id = 0
-
+            
             for _, cluster_spans in clustered.items():
                 # Trier par position (Y puis X)
                 sorted_spans = sorted(
                     cluster_spans,
                     key=lambda s: (s['bbox'][1], s['bbox'][0])
                 )
-
+                
                 # Vérifier et corriger les superpositions
                 non_overlapping_groups = self._separate_overlapping_spans(sorted_spans)
-
+                
                 for group in non_overlapping_groups:
                     final_clusters[cluster_id] = group
                     cluster_id += 1
-
+            
             return final_clusters if final_clusters else {0: spans}
-
+            
         except Exception as e:
             logger.error(f"Erreur clustering amélioré: {e}")
             return {0: spans}
@@ -2415,20 +2387,20 @@ class UltraAdvancedPDFExtractor:
         """
         if not spans:
             return []
-
+        
         groups = []
         current_group = [spans[0]]
-
+        
         for i in range(1, len(spans)):
             current_span = spans[i]
             overlaps = False
-
+            
             # Vérifier la superposition avec chaque span du groupe actuel
             for existing_span in current_group:
                 if self._spans_overlap(existing_span, current_span):
                     overlaps = True
                     break
-
+            
             if overlaps:
                 # Commencer un nouveau groupe si superposition détectée
                 groups.append(current_group)
@@ -2436,10 +2408,10 @@ class UltraAdvancedPDFExtractor:
             else:
                 # Ajouter au groupe actuel si pas de superposition
                 current_group.append(current_span)
-
+        
         if current_group:
             groups.append(current_group)
-
+        
         return groups
 
     def _spans_overlap(self, span1: Dict, span2: Dict) -> bool:
@@ -2448,58 +2420,58 @@ class UltraAdvancedPDFExtractor:
         """
         bbox1 = span1.get('bbox', [0, 0, 0, 0])
         bbox2 = span2.get('bbox', [0, 0, 0, 0])
-
+        
         # Extraire les coordonnées
         x1_start, y1_start, x1_end, y1_end = bbox1
         x2_start, y2_start, x2_end, y2_end = bbox2
-
+        
         # Vérifier la superposition horizontale
         h_overlap = not (x1_end < x2_start or x2_end < x1_start)
-
+        
         # Vérifier la superposition verticale
         v_overlap = not (y1_end < y2_start or y2_end < y1_start)
-
+        
         return h_overlap and v_overlap
 
     def _create_text_block_from_spans_improved(
-            self,
-            spans: List[Dict],
-            page_num: int,
-            page_width: float,
-            page_height: float
-    ) -> Optional[Dict]:
+    self, 
+    spans: List[Dict], 
+    page_num: int,
+    page_width: float,
+    page_height: float
+) -> Optional[Dict]:
         """
         Création améliorée de blocs de texte avec gestion intelligente de l'espacement.
         """
         if not spans:
             return None
-
+        
         try:
             # Calculer la boîte englobante
             min_x = min(span['bbox'][0] for span in spans)
             min_y = min(span['bbox'][1] for span in spans)
             max_x = max(span['bbox'][2] for span in spans)
             max_y = max(span['bbox'][3] for span in spans)
-
+            
             # Trier les spans par position
             sorted_spans = sorted(spans, key=lambda s: (s['bbox'][1], s['bbox'][0]))
-
+            
             # Regrouper en lignes avec détection d'espacement intelligent
             lines = self._group_spans_into_lines(sorted_spans)
-
+            
             # Construire le texte avec gestion appropriée des espaces
             combined_text = self._build_text_from_lines(lines)
-
+            
             # Normaliser le texte final
             combined_text = self._normalize_whitespace_advanced(combined_text)
-
+            
             if not combined_text.strip():
                 return None
-
+            
             # Analyser le style dominant
             style_analysis = self._analyze_dominant_style(spans)
             element_type = self._classify_text_element(combined_text, style_analysis)
-
+            
             text_block = {
                 'type': 'text',
                 'element_type': element_type,
@@ -2520,9 +2492,9 @@ class UltraAdvancedPDFExtractor:
                 'lines_count': len(lines),
                 'confidence': self._calculate_text_confidence(spans, combined_text)
             }
-
+            
             return text_block
-
+            
         except Exception as e:
             logger.error(f"Erreur création bloc texte amélioré: {e}")
             return None
@@ -2533,18 +2505,18 @@ class UltraAdvancedPDFExtractor:
         """
         if not spans:
             return []
-
+        
         lines = []
         current_line = [spans[0]]
         prev_y_center = (spans[0]['bbox'][1] + spans[0]['bbox'][3]) / 2
-
+        
         # Calculer la hauteur moyenne pour la tolérance
         avg_height = sum(s['bbox'][3] - s['bbox'][1] for s in spans) / len(spans)
         tolerance = avg_height * 0.3  # 30% de la hauteur moyenne
-
+        
         for span in spans[1:]:
             y_center = (span['bbox'][1] + span['bbox'][3]) / 2
-
+            
             # Si le span est sur la même ligne (dans la tolérance)
             if abs(y_center - prev_y_center) <= tolerance:
                 current_line.append(span)
@@ -2553,10 +2525,10 @@ class UltraAdvancedPDFExtractor:
                 lines.append(sorted(current_line, key=lambda s: s['bbox'][0]))
                 current_line = [span]
                 prev_y_center = y_center
-
+        
         if current_line:
             lines.append(sorted(current_line, key=lambda s: s['bbox'][0]))
-
+        
         return lines
 
     def _build_text_from_lines(self, lines: List[List[Dict]]) -> str:
@@ -2564,29 +2536,29 @@ class UltraAdvancedPDFExtractor:
         Construit le texte à partir des lignes avec espacement intelligent.
         """
         text_parts = []
-
+        
         for line in lines:
             line_text = ""
             prev_x_end = None
-
+            
             for span in line:
                 span_text = span.get('text', '')
-
+                
                 if prev_x_end is not None:
                     # Calculer l'espace entre les spans
                     gap = span['bbox'][0] - prev_x_end
-
+                    
                     # Ajouter un espace si l'écart est significatif
                     if gap > 2:  # Seuil minimal pour un espace
                         # Calculer le nombre d'espaces approximatif
                         avg_char_width = (span['bbox'][2] - span['bbox'][0]) / max(len(span_text), 1)
                         num_spaces = max(1, int(gap / avg_char_width))
                         line_text += ' ' * min(num_spaces, 3)  # Limiter à 3 espaces max
-
+                
                 line_text += span_text
                 prev_x_end = span['bbox'][2]
-
+            
             text_parts.append(line_text)
-
+        
         # Joindre les lignes avec des espaces (seront normalisés après)
         return '\n'.join(text_parts)
