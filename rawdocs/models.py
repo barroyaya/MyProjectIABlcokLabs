@@ -14,11 +14,11 @@ def pdf_upload_to(instance, filename):
     Ex. "20250626_143502/mon_document.pdf" pour les métadonneurs
     """
     ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-
+    
     # Si c'est un document client, le placer dans le dossier Client
     if hasattr(instance, 'source') and instance.source == 'Client':
         return join('Client', ts, filename)
-
+    
     # Pour les métadonneurs, garder l'ancien système
     return join(ts, filename)
 
@@ -65,6 +65,7 @@ class RawDocument(models.Model):
         # Dans un environnement de production, vous pourriez vouloir être plus restrictif
         return True
 
+
     # Métadonnées extraites
     title = models.TextField(blank=True, help_text="Titre du document")
     doc_type = models.CharField("Type", max_length=100, blank=True, help_text="Type du document (guide, rapport…)")
@@ -75,8 +76,7 @@ class RawDocument(models.Model):
     country = models.CharField(max_length=100, blank=True, help_text="Pays détecté (GPE ou TLD)")
     language = models.CharField(max_length=10, blank=True, help_text="Langue détectée (fr, en…)")
     url_source = models.URLField(blank=True, help_text="URL d'origine pour référence")
-    original_ai_metadata = models.JSONField(null=True, blank=True,
-                                            help_text="Original AI extracted metadata for RLHF comparison")
+    original_ai_metadata = models.JSONField(null=True, blank=True, help_text="Original AI extracted metadata for RLHF comparison")
     # JSON global de toutes les annotations du document
     global_annotations_json = models.JSONField(
         null=True, blank=True,
@@ -94,20 +94,18 @@ class RawDocument(models.Model):
         null=True, blank=True,
         help_text="Date de génération du résumé global d'annotations"
     )
-
+    
     # Nouveaux champs pour l'enrichissement (ajoutés depuis le second modèle)
     enriched_annotations_json = models.JSONField(null=True, blank=True)
     enriched_at = models.DateTimeField(null=True, blank=True)
     enriched_by = models.ForeignKey(User, on_delete=SET_NULL, null=True, blank=True, related_name='enriched_documents')
-
+    
     # Contenu structuré (cache HTML fidèle au PDF)
-    structured_html = models.TextField(blank=True,
-                                       help_text="HTML structuré fidèle au PDF (mise en page, tableaux, images)")
-    structured_html_generated_at = models.DateTimeField(null=True, blank=True,
-                                                        help_text="Date de génération du HTML structuré")
+    structured_html = models.TextField(blank=True, help_text="HTML structuré fidèle au PDF (mise en page, tableaux, images)")
+    structured_html_generated_at = models.DateTimeField(null=True, blank=True, help_text="Date de génération du HTML structuré")
     structured_html_method = models.CharField(max_length=100, blank=True, help_text="Méthode d'extraction utilisée")
     structured_html_confidence = models.FloatField(null=True, blank=True, help_text="Confiance globale de l'extraction")
-
+    
     # Validation par expert
     is_expert_validated = models.BooleanField(default=False, help_text="Document validé par un expert")
     expert_validated_at = models.DateTimeField(null=True, blank=True, help_text="Date de validation par un expert")
@@ -226,7 +224,7 @@ class DocumentPage(models.Model):
         null=True, blank=True,
         related_name='validated_pages'
     )
-
+    
     # Nouveaux champs pour validation du résumé (ajoutés depuis le second modèle)
     summary_validated = models.BooleanField(default=False)
     summary_validated_at = models.DateTimeField(null=True, blank=True)
@@ -236,7 +234,7 @@ class DocumentPage(models.Model):
         null=True, blank=True,
         related_name='validated_page_summaries'
     )
-
+    
     # JSON des annotations de la page
     annotations_json = models.JSONField(
         null=True, blank=True,
@@ -378,7 +376,6 @@ class AnnotationType(models.Model):
     DOSAGE = "dosage"
     PHARMACEUTICAL_FORM = "pharmaceutical_form"
     THERAPEUTIC_AREA = "therapeutic_area"
-
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -488,52 +485,6 @@ class AnnotationType(models.Model):
                 created_count += 1
 
         return created_count
-
-    @classmethod
-    def get_predefined_type_names(cls):
-        """Retourne la liste des noms des types prédéfinis (définis dans ce modèle)."""
-        return [
-            cls.PROCEDURE_TYPE,
-            cls.COUNTRY,
-            cls.AUTHORITY,
-            cls.LEGAL_REFERENCE,
-            cls.REQUIRED_DOCUMENT,
-            cls.REQUIRED_CONDITION,
-            cls.DELAY,
-            cls.VARIATION_CODE,
-            cls.FILE_TYPE,
-            cls.PRODUCT,
-            cls.ACTIVE_INGREDIENT,
-            cls.DOSAGE,
-            cls.PHARMACEUTICAL_FORM,
-            cls.THERAPEUTIC_AREA,
-        ]
-
-    @classmethod
-    def get_predefined_types(cls):
-        """Retourne seulement les types d'annotation prédéfinis."""
-        return cls.objects.filter(name__in=cls.get_predefined_type_names()).order_by('display_name')
-
-    @classmethod
-    def get_display_types(cls):
-        """Retourne les types prédéfinis + tous les types personnalisés existants."""
-        # Approche simplifiée : récupérer tous les types et les ordonner
-        # Les types prédéfinis apparaîtront en premier grâce à l'ordre alphabétique
-        return cls.objects.all().order_by('display_name')
-
-    @classmethod
-    def delete_custom_types(cls):
-        """Supprime tous les types d'annotation qui ne sont pas prédéfinis."""
-        predefined_names = cls.get_predefined_type_names()
-        custom_types = cls.objects.exclude(name__in=predefined_names)
-
-        # Compter avant suppression
-        count = custom_types.count()
-
-        # Supprimer les types personnalisés
-        custom_types.delete()
-
-        return count
 
 
 class Annotation(models.Model):
@@ -697,7 +648,7 @@ class CustomField(models.Model):
         ('number', 'Number'),
     ], default='text')
     created_at = models.DateTimeField(auto_now_add=True)
-
+    
     def __str__(self):
         return self.name
 
@@ -706,7 +657,7 @@ class CustomFieldValue(models.Model):
     document = models.ForeignKey(RawDocument, on_delete=models.CASCADE)
     field = models.ForeignKey(CustomField, on_delete=models.CASCADE)
     value = models.TextField(blank=True)
-
+    
     class Meta:
         unique_together = ['document', 'field']
 
