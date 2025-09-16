@@ -315,6 +315,9 @@ urlpatterns = [
 
     # API pour supprimer tous les documents et annotations (ADMIN ONLY)
     path('api/cleanup-all-documents/', views.cleanup_all_documents, name='cleanup_all_documents'),
+
+    # API pour supprimer tous les types d'annotation personnalisés (ADMIN ONLY)
+    path('api/delete-custom-annotation-types/', views.delete_custom_annotation_types, name='delete_custom_annotation_types'),
         # API pour la suggestion d'annotations avec Mistral
     path('api/mistral/suggest_annotations/<int:page_id>/', views.mistral_suggest_annotations, name='mistral_suggest_annotations'),
     

@@ -489,6 +489,52 @@ class AnnotationType(models.Model):
 
         return created_count
 
+    @classmethod
+    def get_predefined_type_names(cls):
+        """Retourne la liste des noms des types prédéfinis (définis dans ce modèle)."""
+        return [
+            cls.PROCEDURE_TYPE,
+            cls.COUNTRY,
+            cls.AUTHORITY,
+            cls.LEGAL_REFERENCE,
+            cls.REQUIRED_DOCUMENT,
+            cls.REQUIRED_CONDITION,
+            cls.DELAY,
+            cls.VARIATION_CODE,
+            cls.FILE_TYPE,
+            cls.PRODUCT,
+            cls.ACTIVE_INGREDIENT,
+            cls.DOSAGE,
+            cls.PHARMACEUTICAL_FORM,
+            cls.THERAPEUTIC_AREA,
+        ]
+
+    @classmethod
+    def get_predefined_types(cls):
+        """Retourne seulement les types d'annotation prédéfinis."""
+        return cls.objects.filter(name__in=cls.get_predefined_type_names()).order_by('display_name')
+
+    @classmethod
+    def get_display_types(cls):
+        """Retourne les types prédéfinis + tous les types personnalisés existants."""
+        # Approche simplifiée : récupérer tous les types et les ordonner
+        # Les types prédéfinis apparaîtront en premier grâce à l'ordre alphabétique
+        return cls.objects.all().order_by('display_name')
+
+    @classmethod
+    def delete_custom_types(cls):
+        """Supprime tous les types d'annotation qui ne sont pas prédéfinis."""
+        predefined_names = cls.get_predefined_type_names()
+        custom_types = cls.objects.exclude(name__in=predefined_names)
+
+        # Compter avant suppression
+        count = custom_types.count()
+
+        # Supprimer les types personnalisés
+        custom_types.delete()
+
+        return count
+
 
 class Annotation(models.Model):
     """Annotation sur une page de document."""

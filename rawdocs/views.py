@@ -691,26 +691,11 @@ def annotate_document(request, doc_id):
     used_type_ids = Annotation.objects.filter(page__document=document).values_list('annotation_type_id',
                                                                                    flat=True).distinct()
     context_text = " ".join([document.context or '', document.doc_type or '', document.source or '']).lower()
-    whitelist = set()
-    if any(k in context_text for k in ['pharma', 'pharmacie', 'medicament', 'drug', 'clinical', 'trial', 'essai']):
-        whitelist.update([AnnotationType.REQUIRED_DOCUMENT, AnnotationType.AUTHORITY, AnnotationType.LEGAL_REFERENCE,
-                          AnnotationType.DELAY, AnnotationType.PROCEDURE_TYPE, AnnotationType.VARIATION_CODE,
-                          AnnotationType.REQUIRED_CONDITION, AnnotationType.FILE_TYPE])
-    elif any(k in context_text for k in ['regulatory', 'réglementaire', 'compliance']):
-        whitelist.update([AnnotationType.REQUIRED_DOCUMENT, AnnotationType.AUTHORITY, AnnotationType.LEGAL_REFERENCE,
-                          AnnotationType.DELAY, AnnotationType.PROCEDURE_TYPE])
-    elif any(k in context_text for k in ['ema', 'europe', 'eu']):
-        whitelist.update([AnnotationType.AUTHORITY, AnnotationType.LEGAL_REFERENCE, AnnotationType.DELAY,
-                          AnnotationType.PROCEDURE_TYPE, AnnotationType.REQUIRED_DOCUMENT])
-    elif any(k in context_text for k in ['fda', 'usa', 'united states']):
-        whitelist.update([AnnotationType.AUTHORITY, AnnotationType.LEGAL_REFERENCE, AnnotationType.DELAY,
-                          AnnotationType.REQUIRED_DOCUMENT])
-    else:
-        whitelist.update([AnnotationType.REQUIRED_DOCUMENT, AnnotationType.AUTHORITY, AnnotationType.LEGAL_REFERENCE,
-                          AnnotationType.DELAY, AnnotationType.PROCEDURE_TYPE])
+    # Use predefined types for all contexts - simplified approach
+    whitelist = set(AnnotationType.get_predefined_type_names())
 
-    # Show all types so newly created custom types are available immediately
-    annotation_types = AnnotationType.objects.all().order_by('display_name')
+    # Show only predefined types (custom types will be deleted)
+    annotation_types = AnnotationType.get_predefined_types()
 
     return render(request, 'rawdocs/annotate_document.html', {
         'document': document,
@@ -1791,25 +1776,8 @@ def annotate_document(request, doc_id):
     except DocumentRegulatoryAnalysis.DoesNotExist:
         global_analysis = None
 
-    # Build reduced, default annotation types + include types already used in this document
-    used_type_ids = Annotation.objects.filter(page__document=document).values_list('annotation_type_id',
-                                                                                   flat=True).distinct()
-
-    # Default whitelist (keywords-independent)
-    whitelist = {
-        AnnotationType.REQUIRED_DOCUMENT,
-        AnnotationType.AUTHORITY,
-        AnnotationType.LEGAL_REFERENCE,
-        AnnotationType.DELAY,
-        AnnotationType.PROCEDURE_TYPE,
-        AnnotationType.VARIATION_CODE,
-        AnnotationType.REQUIRED_CONDITION,
-        AnnotationType.FILE_TYPE,
-    }
-
-    base_qs = AnnotationType.objects.filter(name__in=list(whitelist))
-    used_qs = AnnotationType.objects.filter(id__in=used_type_ids)
-    annotation_types = (base_qs | used_qs).distinct().order_by('display_name')
+    # Afficher tous les types d'entités prédéfinis du modèle
+    annotation_types = AnnotationType.get_predefined_types()
 
     return render(request, 'rawdocs/annotate_document.html', {
         'document': document,
@@ -2986,8 +2954,8 @@ def get_annotation_types(request):
         if created_count > 0:
             print(f"✅ Créé {created_count} types d'annotation par défaut")
 
-        # Récupérer tous les types d'annotation existants
-        annotation_types = AnnotationType.objects.all().order_by('display_name')
+        # Récupérer seulement les types prédéfinis (custom types will be deleted)
+        annotation_types = AnnotationType.get_predefined_types()
 
         # Formater les données pour l'API
         types_data = []
@@ -3178,6 +3146,59 @@ def update_product_from_document_annotations(product, document):
 
     except Exception as e:
         print(f"❌ Erreur lors de la mise à jour du produit: {e}")
+
+
+@login_required
+@require_POST
+def delete_custom_annotation_types(request):
+    """
+    Supprime tous les types d'annotation personnalisés (non prédéfinis)
+    ATTENTION: Cette opération supprime aussi les annotations associées !
+    """
+    try:
+        # Vérifier que l'utilisateur a les permissions (admin ou superuser)
+        if not (request.user.is_superuser or request.user.is_staff):
+            return JsonResponse({
+                'success': False,
+                'error': 'Permission refusée. Seuls les administrateurs peuvent effectuer cette opération.'
+            }, status=403)
+
+        # Compter les types personnalisés avant suppression
+        predefined_names = AnnotationType.get_predefined_type_names()
+        custom_types = AnnotationType.objects.exclude(name__in=predefined_names)
+        custom_count = custom_types.count()
+
+        if custom_count == 0:
+            return JsonResponse({
+                'success': True,
+                'message': 'Aucun type personnalisé à supprimer',
+                'deleted_count': 0
+            })
+
+        # Compter les annotations qui seront supprimées
+        annotations_count = Annotation.objects.filter(annotation_type__in=custom_types).count()
+
+        # Supprimer les types personnalisés (les annotations seront supprimées en cascade)
+        deleted_count = AnnotationType.delete_custom_types()
+
+        print(f"✅ Supprimé {deleted_count} types d'annotation personnalisés")
+        print(f"✅ Supprimé {annotations_count} annotations associées")
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Supprimé {deleted_count} types personnalisés et {annotations_count} annotations associées',
+            'deleted_counts': {
+                'annotation_types': deleted_count,
+                'annotations': annotations_count
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Erreur lors de la suppression des types personnalisés: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
 
 
 @login_required
@@ -3737,3 +3758,4 @@ def save_edited_text(request):
     except Exception as e:
         print(f"Error in save_edited_text: {str(e)}")  # Log for debugging
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        
