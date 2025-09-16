@@ -6448,4 +6448,3 @@ def annotate_page_with_groq_view(request, page_id):
         print(f"⚠️ post-groq update failed: {e}")
 
     return JsonResponse({"success": True, "count": len(anns)})
-
