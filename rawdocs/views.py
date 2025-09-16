@@ -1286,14 +1286,13 @@ def document_structured(request, document_id):
 def save_structured_edits(request, document_id):
     try:
         data = json.loads(request.body)
-        doc_id = data.get('document_id')
         edits = data.get('edits', [])
         extraction_score = data.get('extraction_score', None)
 
-        if not doc_id or not edits:
-            return JsonResponse({'success': False, 'error': 'Missing required fields'}, status=400)
+        if not edits:
+            return JsonResponse({'success': False, 'error': 'No edits provided'}, status=400)
 
-        document = get_object_or_404(RawDocument, id=doc_id, owner=request.user)
+        document = get_object_or_404(RawDocument, id=document_id, owner=request.user)
         if not document.structured_html:
             return JsonResponse({'success': False, 'error': 'No structured HTML to edit'}, status=400)
 
@@ -1304,13 +1303,19 @@ def save_structured_edits(request, document_id):
         for edit in edits:
             element_id = edit.get('element_id')
             new_text = edit.get('new_text', '').strip()
-            if not element_id or not new_text:
+            if not element_id:
                 continue
-            element = soup.find(id=element_id)
+
+            # Chercher l'élément par data-element-id
+            element = soup.find(attrs={'data-element-id': element_id})
             if element:
-                old_text = element.text.strip()
+                old_text = element.get_text().strip()
+                # Remplacer le contenu de l'élément
+                element.clear()
                 element.string = new_text
                 updated_count += 1
+
+                # Log des modifications
                 MetadataLog.objects.create(
                     document=document,
                     field_name='edited_text_' + element_id,
@@ -1326,9 +1331,14 @@ def save_structured_edits(request, document_id):
             document.structured_html_generated_at = timezone.now()
             document.save()
 
+        # Préparer le message de succès
+        message = f'{updated_count} élément(s) mis à jour avec succès.'
+        if extraction_score is not None:
+            message += f' Score d\'extraction : {extraction_score:.2f}%'
+
         return JsonResponse({
             'success': True,
-            'message': f'{updated_count} élément(s) mis à jour avec succès. Score d\'extraction : {extraction_score:.2f}%',
+            'message': message,
             'updated_count': updated_count,
             'total_elements': total_elements,
             'extraction_score': extraction_score

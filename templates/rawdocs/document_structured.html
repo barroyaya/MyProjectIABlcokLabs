@@ -159,6 +159,30 @@
 
     .btn-primary { background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.3); position: relative; overflow: hidden; }
 
+    /* Style pharmaceutique bleu-vert pour le bouton Sauvegarder */
+    .btn-save-pharma {
+        background: linear-gradient(135deg, #0891b2 0%, #059669 100%) !important;
+        border: 2px solid #0891b2 !important;
+        color: white !important;
+        font-weight: 600;
+        padding: 12px 24px;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(8, 145, 178, 0.3);
+    }
+
+    .btn-save-pharma:hover {
+        background: linear-gradient(135deg, #0e7490 0%, #047857 100%) !important;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(8, 145, 178, 0.4);
+        border-color: #0e7490 !important;
+    }
+
+    .btn-save-pharma:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 8px rgba(8, 145, 178, 0.3);
+    }
+
     .btn-primary::before {
         content: '';
         position: absolute;
@@ -246,6 +270,7 @@
 {% endblock %}
 
 {% block content %}
+{% csrf_token %}
 <div class="container-fluid py-4">
     <div class="structured-header">
         <div class="sh-content">
@@ -320,7 +345,23 @@
         <div id="structured-host">
             {{ structured_html|safe }}
         </div>
-        <button id="save-edits" class="btn btn-primary" style="margin-top: 10px;">Sauvegarder</button>
+        <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
+            <button onclick="handleSaveClick()" class="btn btn-save-pharma">
+                <i class="fas fa-save"></i> Sauvegarder
+            </button>
+            <button onclick="handleTestEditable()" class="btn" style="background: #f59e0b; color: white;">
+                <i class="fas fa-bug"></i> Test Éditables
+            </button>
+            <button onclick="handleForceEdit()" class="btn" style="background: #ef4444; color: white;">
+                <i class="fas fa-plus"></i> Créer Test
+            </button>
+            <button onclick="testFunction()" class="btn" style="background: #8b5cf6; color: white;">
+                <i class="fas fa-flask"></i> Test JS
+            </button>
+            <button onclick="console.log('Bouton inline fonctionne!'); alert('Inline OK!');" class="btn" style="background: #10b981; color: white;">
+                <i class="fas fa-check"></i> Test Inline
+            </button>
+        </div>
         {% else %}
         <div class="empty">
             <i class="far fa-file"></i>
@@ -333,24 +374,236 @@
 
 {% block extra_js %}
 <script>
-document.getElementById('save-edits').addEventListener('click', function() {
+// Test de base pour vérifier que le JavaScript fonctionne
+console.log('=== DÉBUT DU SCRIPT ===');
+console.log('Document ready state:', document.readyState);
+console.log('jQuery disponible:', typeof $ !== 'undefined');
+
+// Test immédiat
+console.log('=== TEST IMMÉDIAT ===');
+console.log('Location:', window.location.href);
+console.log('Document title:', document.title);
+
+// Vérifier si on est dans le bon template
+if (document.title.includes('Contenu structuré')) {
+    console.log('✓ Nous sommes dans le bon template');
+    alert('JavaScript chargé dans document_structured ! Vérifiez la console.');
+} else {
+    console.log('✗ Template inattendu');
+    alert('JavaScript chargé mais template inattendu: ' + document.title);
+}
+
+// Fonctions globales pour les boutons onclick
+window.testFunction = function() {
+    console.log('Test function appelée !');
+    alert('Test function fonctionne !');
+};
+
+window.handleSaveClick = function() {
+    console.log('=== BOUTON SAUVEGARDER CLIQUÉ ===');
     const edits = collectEdits();
-    console.log('Modifications collectées :', edits); // Ajout pour débogage
     const status = document.getElementById('save-status');
+
     if (!edits.length) {
         status.textContent = 'Aucun changement à sauvegarder.';
+        alert('Aucun changement détecté !');
         return;
     }
-    status.textContent = 'Sauvegarde en cours…';
 
-    fetch('{% url "rawdocs:save_structured_edits" document.id %}', {
+    status.textContent = 'Sauvegarde en cours…';
+    console.log('Envoi de la requête AJAX...');
+
+    // Récupérer le token CSRF
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                     document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || 
+                     '';
+    console.log('Token CSRF trouvé:', csrfToken ? 'Oui' : 'Non');
+
+    const url = '{% url "rawdocs:save_structured_edits" document.id %}';
+    console.log('URL de sauvegarde:', url);
+
+    const payload = { edits: edits };
+    console.log('Payload à envoyer:', payload);
+
+    fetch(url, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]') ? document.querySelector('[name=csrfmiddlewaretoken]').value : ''
+            'X-CSRFToken': csrfToken
         },
-        body: JSON.stringify({ edits })
+        body: JSON.stringify(payload)
     })
+    .then(response => {
+        console.log('Réponse serveur :', response);
+        if (!response.ok) throw new Error('Erreur serveur : ' + response.statusText);
+        return response.json();
+    })
+    .then(data => {
+        console.log('Données reçues :', data);
+        if (data.success) {
+            status.textContent = `Sauvegardé: ${data.updated_count} élément(s)`;
+            edits.forEach(edit => {
+                const el = document.querySelector(`.editable-content[data-element-id="${edit.element_id}"]`);
+                if (el) el.setAttribute('data-original-text', edit.new_text);
+            });
+            alert(data.message || 'Modifications enregistrées !');
+        } else {
+            status.textContent = 'Erreur: ' + (data.error || data.message);
+            alert('Erreur : ' + (data.error || data.message));
+        }
+    })
+    .catch(error => {
+        console.error('Erreur AJAX :', error);
+        status.textContent = 'Erreur réseau : ' + error.message;
+        alert('Erreur réseau : ' + error.message);
+    });
+};
+
+window.handleTestEditable = function() {
+    console.log('=== TEST DIAGNOSTIC ===');
+
+    const host = document.getElementById('structured-host');
+    console.log('Host trouvé:', !!host);
+
+    if (host) {
+        console.log('Contenu HTML du host:', host.innerHTML.substring(0, 500) + '...');
+
+        const allEditables = host.querySelectorAll('.editable-content');
+        console.log('Éléments .editable-content dans host:', allEditables.length);
+
+        const allContenteditable = host.querySelectorAll('[contenteditable="true"]');
+        console.log('Éléments contenteditable dans host:', allContenteditable.length);
+
+        allEditables.forEach((el, i) => {
+            console.log(`Élément ${i}:`, {
+                tagName: el.tagName,
+                className: el.className,
+                id: el.getAttribute('data-element-id'),
+                originalText: el.getAttribute('data-original-text'),
+                currentText: el.textContent.trim()
+            });
+        });
+    }
+
+    const edits = collectEdits();
+    alert(`Test terminé! Voir la console. ${edits.length} éditions trouvées.`);
+};
+
+window.handleForceEdit = function() {
+    console.log('=== CRÉATION ÉLÉMENT TEST ===');
+
+    const host = document.getElementById('structured-host');
+    if (host) {
+        const testElement = document.createElement('div');
+        testElement.className = 'editable-content ultra-element ultra-text';
+        testElement.setAttribute('contenteditable', 'true');
+        testElement.setAttribute('data-element-id', 'test-element-' + Date.now());
+        testElement.setAttribute('data-original-text', 'Texte de test original');
+        testElement.textContent = 'Texte de test original';
+        testElement.style.cssText = 'border: 2px dashed #f59e0b; padding: 10px; margin: 10px 0; background: #fef3c7;';
+
+        host.appendChild(testElement);
+        console.log('Élément de test créé:', testElement.getAttribute('data-element-id'));
+        alert('Élément de test créé! Modifiez le texte puis cliquez sur Sauvegarder.');
+    } else {
+        alert('Host non trouvé!');
+    }
+};
+
+console.log('Script document_structured.html chargé');
+
+function collectEdits() {
+    const edits = [];
+    console.log('=== DÉBUT COLLECTE DES ÉDITIONS ===');
+
+    // Chercher spécifiquement les éléments avec la classe editable-content
+    const editableElements = document.querySelectorAll('.editable-content[data-element-id]');
+    console.log('Éléments .editable-content trouvés:', editableElements.length);
+
+    if (editableElements.length === 0) {
+        console.log('Aucun élément .editable-content trouvé, recherche alternative...');
+        // Fallback: chercher tous les éléments contenteditable
+        const fallbackElements = document.querySelectorAll('[contenteditable="true"]');
+        console.log('Éléments contenteditable trouvés:', fallbackElements.length);
+
+        fallbackElements.forEach((el, index) => {
+            if (!el.getAttribute('data-element-id')) {
+                el.setAttribute('data-element-id', 'fallback-' + index);
+            }
+            if (!el.getAttribute('data-original-text')) {
+                const currentText = el.textContent.trim();
+                el.setAttribute('data-original-text', currentText);
+                console.log(`Élément fallback initialisé: ${el.getAttribute('data-element-id')} = "${currentText}"`);
+            }
+        });
+
+        // Relancer la recherche
+        return collectEdits();
+    }
+
+    editableElements.forEach((el, index) => {
+        const elementId = el.getAttribute('data-element-id');
+        const original = el.getAttribute('data-original-text') || '';
+        const modified = el.textContent.trim();
+
+        console.log(`[${index}] ID: ${elementId}`);
+        console.log(`[${index}] Original: "${original}"`);
+        console.log(`[${index}] Modifié: "${modified}"`);
+        console.log(`[${index}] Changé: ${original !== modified}`);
+
+        if (elementId && original !== modified) {
+            edits.push({ 
+                element_id: elementId, 
+                new_text: modified 
+            });
+            console.log(`[${index}] ✓ Ajouté aux éditions`);
+        } else {
+            console.log(`[${index}] ✗ Pas d'édition`);
+        }
+    });
+
+    console.log('=== RÉSULTAT FINAL ===');
+    console.log('Nombre d\'éditions:', edits.length);
+    console.log('Éditions:', edits);
+    return edits;
+}
+
+const saveButton = document.getElementById('save-edits');
+if (saveButton) {
+    saveButton.addEventListener('click', function() {
+        console.log('Bouton Sauvegarder cliqué !'); // Debug
+        const edits = collectEdits();
+        console.log('Modifications collectées :', edits); // Ajout pour débogage
+        const status = document.getElementById('save-status');
+        if (!edits.length) {
+            status.textContent = 'Aucun changement à sauvegarder.';
+            return;
+        }
+        status.textContent = 'Sauvegarde en cours…';
+        console.log('Envoi de la requête AJAX...'); // Debug
+
+        // Récupérer le token CSRF
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                         document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || 
+                         '';
+        console.log('Token CSRF trouvé:', csrfToken ? 'Oui' : 'Non');
+
+        const url = '{% url "rawdocs:save_structured_edits" document.id %}';
+        console.log('URL de sauvegarde:', url);
+
+        const payload = { 
+            edits: edits 
+        };
+        console.log('Payload à envoyer:', payload);
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(payload)
+        })
     .then(response => {
         console.log('Réponse serveur :', response); // Ajout pour débogage
         if (!response.ok) throw new Error('Erreur serveur : ' + response.statusText);
@@ -359,15 +612,15 @@ document.getElementById('save-edits').addEventListener('click', function() {
     .then(data => {
         console.log('Données reçues :', data); // Ajout pour débogage
         if (data.success) {
-            status.textContent = `Sauvegardé: ${data.saved_count} élément(s)`;
+            status.textContent = `Sauvegardé: ${data.updated_count} élément(s)`;
             edits.forEach(edit => {
                 const el = document.querySelector(`.editable-content[data-element-id="${edit.element_id}"]`);
-                if (el) el.setAttribute('data-original-text', edit.modified);
+                if (el) el.setAttribute('data-original-text', edit.new_text);
             });
             alert(data.message || 'Modifications enregistrées !');
         } else {
-            status.textContent = 'Erreur: ' + data.message;
-            alert('Erreur : ' + data.message);
+            status.textContent = 'Erreur: ' + (data.error || data.message);
+            alert('Erreur : ' + (data.error || data.message));
         }
     })
     .catch(error => {
@@ -375,25 +628,99 @@ document.getElementById('save-edits').addEventListener('click', function() {
         status.textContent = 'Erreur réseau : ' + error.message;
         alert('Erreur réseau : ' + error.message);
     });
-});
+    });
+} else {
+    console.log('Bouton Sauvegarder non trouvé dans le DOM');
+}
+
+// Bouton de test pour diagnostiquer les éléments éditables
+const testButton = document.getElementById('test-editable');
+if (testButton) {
+    testButton.addEventListener('click', function() {
+        console.log('=== TEST DIAGNOSTIC ===');
+
+        const host = document.getElementById('structured-host');
+        console.log('Host trouvé:', !!host);
+
+        if (host) {
+            console.log('Contenu HTML du host:', host.innerHTML.substring(0, 500) + '...');
+
+            const allEditables = host.querySelectorAll('.editable-content');
+            console.log('Éléments .editable-content dans host:', allEditables.length);
+
+            const allContenteditable = host.querySelectorAll('[contenteditable="true"]');
+            console.log('Éléments contenteditable dans host:', allContenteditable.length);
+
+            allEditables.forEach((el, i) => {
+                console.log(`Élément ${i}:`, {
+                    tagName: el.tagName,
+                    className: el.className,
+                    id: el.getAttribute('data-element-id'),
+                    originalText: el.getAttribute('data-original-text'),
+                    currentText: el.textContent.trim()
+                });
+            });
+        }
+
+        const edits = collectEdits();
+        alert(`Test terminé! Voir la console. ${edits.length} éditions trouvées.`);
+    });
+}
+
+// Bouton pour forcer la création d'un élément de test
+const forceButton = document.getElementById('force-edit');
+if (forceButton) {
+    forceButton.addEventListener('click', function() {
+        console.log('=== CRÉATION ÉLÉMENT TEST ===');
+
+        const host = document.getElementById('structured-host');
+        if (host) {
+            const testElement = document.createElement('div');
+            testElement.className = 'editable-content ultra-element ultra-text';
+            testElement.setAttribute('contenteditable', 'true');
+            testElement.setAttribute('data-element-id', 'test-element-' + Date.now());
+            testElement.setAttribute('data-original-text', 'Texte de test original');
+            testElement.textContent = 'Texte de test original';
+            testElement.style.cssText = 'border: 2px dashed #f59e0b; padding: 10px; margin: 10px 0; background: #fef3c7;';
+
+            host.appendChild(testElement);
+            console.log('Élément de test créé:', testElement.getAttribute('data-element-id'));
+            alert('Élément de test créé! Modifiez le texte puis cliquez sur Sauvegarder.');
+        } else {
+            alert('Host non trouvé!');
+        }
+    });
+}
 
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM chargé, initialisation des éléments éditables...');
+
     // Sélectionner tous les éléments éditables
-    const editables = document.querySelectorAll('.editable-content');
+    const editables = document.querySelectorAll('.editable-content, [contenteditable="true"]');
+    console.log('Éléments éditables trouvés au chargement:', editables.length);
 
     editables.forEach(function(editable, index) {
         // Ajouter un identifiant unique si absent
-        if (!editable.closest('.ultra-element').hasAttribute('data-element-id')) {
-            editable.closest('.ultra-element').setAttribute('data-element-id', 'text-block-' + index);
+        if (!editable.hasAttribute('data-element-id')) {
+            // Essayer de trouver un parent avec un ID
+            const parentWithId = editable.closest('[data-element-id]');
+            if (parentWithId) {
+                editable.setAttribute('data-element-id', parentWithId.getAttribute('data-element-id'));
+            } else {
+                editable.setAttribute('data-element-id', 'text-block-' + index);
+            }
         }
 
-        // Mettre à jour data-original-text en temps réel
+        // Initialiser data-original-text avec le contenu actuel
+        if (!editable.hasAttribute('data-original-text')) {
+            const currentText = (editable.innerText || editable.textContent || '').trim();
+            editable.setAttribute('data-original-text', currentText);
+            console.log(`Élément ${editable.getAttribute('data-element-id')} initialisé avec: "${currentText}"`);
+        }
+
+        // Mettre à jour data-original-text en temps réel (optionnel, pour le debug)
         editable.addEventListener('input', function() {
-            const newText = this.innerHTML.trim();
-            const originalText = this.getAttribute('data-original-text') || '';
-            if (newText !== originalText) {
-                this.setAttribute('data-original-text', newText);
-            }
+            console.log(`Modification détectée sur ${this.getAttribute('data-element-id')}`);
         });
     });
 
@@ -405,56 +732,18 @@ document.addEventListener('DOMContentLoaded', function() {
             const original = el.getAttribute('data-original-text') || '';
             const modified = (el.innerText || el.textContent || '').trim();
             if (elementId && original !== modified) {
-                edits.push({ type: 'text', element_id: elementId, original, modified });
+                edits.push({ 
+                    type: 'text', 
+                    element_id: elementId, 
+                    original: original, 
+                    new_text: modified 
+                });
             }
         });
         return edits;
     }
 
-    // Sauvegarde manuelle via le bouton
-    const saveButton = document.getElementById('save-edits');
-    if (saveButton) {
-        saveButton.addEventListener('click', function() {
-            const edits = collectEdits();
-            const status = document.getElementById('save-status');
-            if (!edits.length) {
-                status.textContent = 'Aucun changement à sauvegarder.';
-                return;
-            }
-            status.textContent = 'Sauvegarde en cours…';
-
-            fetch('{% url "rawdocs:save_structured_edits" document.id %}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]') ? document.querySelector('[name=csrfmiddlewaretoken]').value : ''
-                },
-                body: JSON.stringify({ edits })
-            })
-            .then(response => {
-                if (!response.ok) throw new Error('Erreur serveur : ' + response.statusText);
-                return response.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    status.textContent = `Sauvegardé: ${data.saved_count} élément(s)`;
-                    // Mettre à jour les originaux après sauvegarde
-                    edits.forEach(edit => {
-                        const el = document.querySelector(`.editable-content[data-element-id="${edit.element_id}"]`);
-                        if (el) el.setAttribute('data-original-text', edit.modified);
-                    });
-                    alert(data.message || 'Modifications enregistrées !');
-                } else {
-                    status.textContent = 'Erreur: ' + data.message;
-                    alert('Erreur : ' + data.message);
-                }
-            })
-            .catch(error => {
-                status.textContent = 'Erreur réseau : ' + error.message;
-                alert('Erreur réseau : ' + error.message);
-            });
-        });
-    }
+    // La gestion du bouton de sauvegarde est déjà faite plus haut dans le script
 
     // Fonctionnalités supplémentaires
     (function() {
