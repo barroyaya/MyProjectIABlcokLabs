@@ -2071,8 +2071,8 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeModals();
     initializeExistingFunctionality();
     
-    // Charger automatiquement tous les types d'annotation existants
-    loadExistingAnnotationTypes();
+    // Charger automatiquement les types d'annotation suggérés par Mistral
+    loadMistralAnnotationTypes();
 });
 
 function initializeProdigyToolbar() {
@@ -3605,15 +3605,17 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /**
- * Fonction pour charger automatiquement tous les types d'annotation existants
+ * Fonction pour charger automatiquement les types d'annotation suggérés par Mistral
  */
-function loadExistingAnnotationTypes() {
-    console.log("🔄 Chargement de tous les types d'annotation existants...");
-
+function loadMistralAnnotationTypes() {
+    console.log("🔄 Chargement des types d'annotation suggérés par Mistral...");
+    
+    // Utiliser la variable globale DOCUMENT_ID définie en haut du document
+    
     // Afficher un indicateur de chargement
     var loadingDiv = document.createElement('div');
-    loadingDiv.id = 'annotation-loading-indicator';
-    loadingDiv.className = 'annotation-loading-indicator';
+    loadingDiv.id = 'mistral-loading-indicator';
+    loadingDiv.className = 'mistral-loading-indicator';
     loadingDiv.innerHTML = '<div class="spinner-border spinner-border-sm text-primary"></div><span>Chargement des types d\'annotation...</span>';
     loadingDiv.style.position = 'fixed';
     loadingDiv.style.top = '10px';
@@ -3624,9 +3626,9 @@ function loadExistingAnnotationTypes() {
     loadingDiv.style.zIndex = '9999';
     loadingDiv.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
     document.body.appendChild(loadingDiv);
-
-    // Récupérer tous les types d'annotation existants depuis le serveur
-    fetch('/api/annotation-types/', {
+    
+    // Appeler l'API Mistral avec l'ID global
+    fetch('/api/mistral/analyze_document/' + DOCUMENT_ID + '/', {
         method: 'GET',
         headers: {
             'X-CSRFToken': getCookie('csrftoken'),
@@ -3637,41 +3639,42 @@ function loadExistingAnnotationTypes() {
         return response.json();
     })
     .then(function(data) {
-        if (data.success && data.annotation_types) {
-            var entityCount = data.annotation_types.length;
-
-            console.log('✅ Chargé', entityCount, 'types d\'annotation existants');
-
-            if (data.annotation_types.length > 0) {
-                // Mettre à jour l'interface avec tous les types existants
-                updateToolbarWithExistingTypes(data.annotation_types);
-
-                // Afficher notification
-                var successDiv = document.createElement('div');
-                successDiv.className = 'validation-success';
-                successDiv.innerHTML = '<i class="fas fa-tags" style="font-size: 1.5rem;"></i>' +
-                    '<div><strong>✅ Types d\'annotation chargés</strong>' +
-                    '<div style="font-size: 0.9rem; opacity: 0.9;">' +
-                    entityCount + ' types d\'annotation disponibles' + 
-                    '</div></div>';
-                var mainContent = document.querySelector('.text-content-card');
+            if (data.success) {
+                var entityCount = data.entity_types ? data.entity_types.length : 0;
+                var displayLanguage = data.displayed_language || '';
+                
+                console.log('✅ Mistral a suggéré', entityCount, 'types d\'annotation en', displayLanguage);
+                
+                if (data.entity_types && data.entity_types.length > 0) {
+                    // Mettre à jour l'interface
+                    updateToolbarWithMistralTypes(data.entity_types);
+                    
+                    // Afficher notification
+                    var successDiv = document.createElement('div');
+                    successDiv.className = 'validation-success';
+                    successDiv.innerHTML = '<i class="fas fa-brain" style="font-size: 1.5rem;"></i>' +
+                        '<div><strong>✅ Types d\'annotation optimisés</strong>' +
+                        '<div style="font-size: 0.9rem; opacity: 0.9;">' +
+                        'Mistral a identifié ' + entityCount + ' types pertinents' + 
+                        (displayLanguage ? ' <span class="badge bg-info" title="Langue détectée automatiquement">' + displayLanguage + '</span>' : '') + 
+                        '</div></div>';                var mainContent = document.querySelector('.text-content-card');
                 if (mainContent) {
                     mainContent.parentNode.insertBefore(successDiv, mainContent);
                     setTimeout(function() {
                         successDiv.remove();
-                    }, 3000);
+                    }, 5000);
                 }
             }
         } else {
-            console.error('Erreur lors du chargement des types d\'annotation:', data.error);
+            console.error('Erreur lors de l\'analyse Mistral:', data.error);
         }
     })
     .catch(function(error) {
-        console.error('Erreur lors de l\'appel à l\'API des types d\'annotation:', error);
+        console.error('Erreur lors de l\'appel à l\'API Mistral:', error);
     })
     .finally(function() {
         // Supprimer l'indicateur de chargement
-        var loadingIndicator = document.getElementById('annotation-loading-indicator');
+        var loadingIndicator = document.getElementById('mistral-loading-indicator');
         if (loadingIndicator) {
             loadingIndicator.remove();
         }
@@ -3679,14 +3682,14 @@ function loadExistingAnnotationTypes() {
 }
 
 /**
- * Met à jour la barre d'outils avec tous les types d'annotation existants
+ * Met à jour la barre d'outils avec les types d'annotation suggérés
  */
-function updateToolbarWithExistingTypes(annotationTypes) {
-    if (!annotationTypes || annotationTypes.length === 0) return;
-
+function updateToolbarWithMistralTypes(entityTypes) {
+    if (!entityTypes || entityTypes.length === 0) return;
+    
     var toolbar = document.getElementById('label-toolbar');
     if (!toolbar) return;
-
+    
     // Sauvegarder les boutons spéciaux
     var specialButtons = [];
     toolbar.querySelectorAll('button').forEach(function(btn) {
@@ -3694,12 +3697,12 @@ function updateToolbarWithExistingTypes(annotationTypes) {
             specialButtons.push(btn.cloneNode(true));
         }
     });
-
+    
     // Vider la barre d'outils
     toolbar.innerHTML = '';
-
-    // Ajouter tous les types d'annotation existants
-    annotationTypes.forEach(function(type) {
+    
+    // Ajouter les nouveaux types
+    entityTypes.forEach(function(type) {
         var button = document.createElement('button');
         button.className = 'label-btn';
         button.dataset.id = type.id;
@@ -3707,12 +3710,12 @@ function updateToolbarWithExistingTypes(annotationTypes) {
         button.dataset.color = type.color;
         button.style.background = type.color;
         button.textContent = type.display_name;
-
+        
         button.addEventListener('click', function() {
             document.querySelectorAll('.label-btn').forEach(function(b) {
                 b.classList.remove('active');
             });
-
+            
             button.classList.add('active');
             currentLabel = {
                 id: button.dataset.id,
@@ -3720,11 +3723,11 @@ function updateToolbarWithExistingTypes(annotationTypes) {
                 color: button.dataset.color
             };
         });
-
+        
         toolbar.appendChild(button);
         annotationTypeMap[type.name] = type.id;
     });
-
+    
     // Réajouter les boutons spéciaux
     specialButtons.forEach(function(btn) {
         if (btn.classList.contains('annotation-type-btn-add')) {
@@ -3738,8 +3741,8 @@ function updateToolbarWithExistingTypes(annotationTypes) {
         }
         toolbar.appendChild(btn);
     });
-
-    console.log('🔄 Barre d\'outils mise à jour avec tous les types d\'annotation existants');
+    
+    console.log('🔄 Barre d\'outils mise à jour avec les types d\'annotation suggérés par Mistral');
 }
 
 console.log('Prodigy-like annotation system with full functionality loaded successfully');

@@ -310,11 +310,6 @@ urlpatterns = [
 
     path('dev-metier/documents/<int:doc_id>/save-json/', views.save_document_json_devmetier, name='save_document_json_devmetier'),
     
-        # API pour récupérer tous les types d'annotation existants
-    path('api/annotation-types/', views.get_annotation_types, name='get_annotation_types'),
-
-    # API pour supprimer tous les documents et annotations (ADMIN ONLY)
-    path('api/cleanup-all-documents/', views.cleanup_all_documents, name='cleanup_all_documents'),
         # API pour la suggestion d'annotations avec Mistral
     path('api/mistral/suggest_annotations/<int:page_id>/', views.mistral_suggest_annotations, name='mistral_suggest_annotations'),
     
