@@ -173,6 +173,18 @@
             </GhostTextMetaData>
           </value>
         </entry>
+        <entry key="hello">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1758260414765" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
       </map>
     </option>
   </component>
