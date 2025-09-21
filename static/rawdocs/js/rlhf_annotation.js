@@ -1,6 +1,6 @@
 // static/rawdocs/js/rlhf_annotation.js
 
-// Enhanced AI annotation with RLHF learning
+// Enhanced AI annotation with RLHF learning - Page mode
 function annotateWithGroq() {
     const btn = document.getElementById('groq-annotate-btn');
     const loading = document.getElementById('ai-loading');
@@ -11,7 +11,8 @@ function annotateWithGroq() {
     btn.style.display = 'none';
     loading.style.display = 'flex';
 
-    const pageId = document.getElementById('text-content')?.dataset?.pageId;
+    // Get page ID from the text content element
+    const pageId = document.getElementById('page-text')?.dataset?.pageId;
     if (!pageId) {
         showErrorMessage('Page ID non trouvée');
         return;
@@ -34,7 +35,19 @@ function annotateWithGroq() {
                 validateBtn.innerHTML = '<i class="fas fa-graduation-cap"></i> Valider la Page';
             }
 
-            setTimeout(() => location.reload(), 1500);
+            // Au lieu de recharger la page, on va afficher les annotations dans le contenu structuré
+            if (data.annotations && data.annotations.length > 0) {
+                const structuredContent = document.querySelector('.structured-content-body');
+                if (structuredContent) {
+                    // Pour chaque annotation, on l'ajoute au contenu structuré
+                    data.annotations.forEach(annotation => {
+                        addAnnotationToStructuredContent(annotation);
+                    });
+                }
+            }
+
+            // En parallèle, on met à jour aussi les annotations dans la zone principale
+            loadAndRenderAnnotations();
         } else {
             throw new Error(data.error || 'Erreur inconnue lors de l\'annotation');
         }
@@ -48,6 +61,70 @@ function annotateWithGroq() {
         loading.style.display = 'none';
     });
 }
+
+// La fonction annotateWithGroqAll est maintenant définie dans le template pour garantir l'ordre de chargement
+
+// Enhanced AI annotation with RLHF learning - Document mode
+function annotateWithGroqAll() {
+    const btn = document.getElementById('groq-annotate-all-btn');
+    const loading = document.getElementById('ai-loading');
+    const validateBtn = document.getElementById('validate-page-btn');
+    
+    // Use the global DOCUMENT_ID variable defined in the template
+    if (!btn || !loading || typeof DOCUMENT_ID === 'undefined') {
+        console.error('Annotation impossible : ID du document non disponible ou éléments manquants');
+        showErrorMessage('Éléments manquants pour l\'annotation du document');
+        return;
+    }
+
+    // Confirmation temporairement désactivée pour le développement
+    /*if (!confirm('Cette action va annoter l\'ensemble du document structuré. Continuer?')) {
+        return;
+    }*/
+
+    btn.style.display = 'none';
+    loading.style.display = 'flex';
+    loading.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Annotation du document en cours...';
+
+    fetch(`/annotation/groq/document/${DOCUMENT_ID}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            mode: 'structured' // Indicate we want to use structured content
+        })
+    })
+    .then(handleResponse)
+    .then(data => {
+        if (data.success) {
+            showSuccessMessage(`🎉 Document annoté! ${data.annotations_created} annotations créées`);
+            
+            if (data.total_pages > 0) {
+                showAlert(`${data.total_pages} pages traitées avec succès!`, 'success', '#10b981');
+            }
+
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            throw new Error(data.error || 'Erreur inconnue lors de l\'annotation');
+        }
+    })
+    .catch(error => {
+        console.error('Annotation Error:', error);
+        showErrorMessage(`Erreur annotation: ${error.message}`);
+    })
+    .finally(() => {
+        btn.style.display = 'flex';
+        loading.style.display = 'none';
+        loading.innerHTML = '<i class="fas fa-spinner fa-spin"></i> IA en cours...';
+    });
+}
+
+// Make the function globally available
+window.annotateWithGroqAll = annotateWithGroqAll;
+
+
 
 // Enhanced validate page function with better error handling
 function validatePage() {
