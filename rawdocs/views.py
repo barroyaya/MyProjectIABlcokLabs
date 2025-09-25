@@ -215,18 +215,11 @@ def upload_pdf(request):
         rd = get_object_or_404(RawDocument, id=doc_id, owner=request.user)
         edit_form = MetadataEditForm(request.POST)
         
-        # Get ORIGINAL AI extracted metadata (what AI first extracted)
-        ai_metadata = {}
-        standard_fields = ['title', 'doc_type', 'publication_date', 'version', 'source', 'context', 'country', 'language', 'url_source']
-        
-        # Get ORIGINAL AI extracted metadata (what was first extracted by LLM)
         ai_metadata = rd.original_ai_metadata or {}
 
         if edit_form.is_valid():
-            # Collect human corrections
             human_metadata = {}
             changes_made = False
-            
             field_mapping = {
                 'title': 'title',
                 'type': 'doc_type', 
@@ -255,24 +248,18 @@ def upload_pdf(request):
             
             if changes_made:
                 rd.save()
-                
-                # Process RLHF Learning ONLY if changes were made
                 from .metadata_rlhf_learning import MetadataRLHFLearner
                 learner = MetadataRLHFLearner()
                 feedback_result = learner.process_metadata_feedback(rd, ai_metadata, human_metadata, request.user)
 
-                # Create detailed message with learning stats
                 corrections = feedback_result['corrections_summary']
                 score = int(feedback_result['feedback_score'] * 100)
                 correct_count = len(corrections.get('kept_correct', []))
                 wrong_count = len(corrections.get('corrected_fields', [])) + len(corrections.get('removed_fields', []))
                 missed_count = len(corrections.get('missed_fields', []))
 
-                # Show success message with learning stats
                 learning_message = f"✅ Métadonnées sauvegardées! 🧠 IA Score: {score}% | ✅ Corrects: {correct_count} | ❌ Erreurs: {wrong_count} | 📝 Manqués: {missed_count}"
                 messages.success(request, learning_message)
-
-                # Pass learning data to template
                 context['learning_feedback'] = {
                     'score': score,
                     'correct': correct_count,
@@ -283,39 +270,15 @@ def upload_pdf(request):
                 }
             else:
                 messages.info(request, "Aucune modification détectée.")
-  
 
         metadata = extract_metadonnees(rd.file.path, rd.url or "")
         text = extract_full_text(rd.file.path)
 
-        # Générer le HTML structuré pour l'affichage (DocumentProcessor)
-        structured_html = ""
-        method = 'document_processor'
-        confidence = None
-        try:
-            from documents.models import Document as DocModel
-            from documents.utils.document_processor import DocumentProcessor
-            # Créer ou récupérer un Document associé
-            ext = os.path.splitext(rd.file.name)[1].lower().lstrip('.')
-            allowed = {'pdf', 'docx', 'doc', 'txt', 'html', 'xlsx', 'xls', 'rtf'}
-            file_type = ext if ext in allowed else 'pdf'
-            doc = DocModel.objects.filter(original_file=rd.file.name, uploaded_by=rd.owner or request.user).first()
-            if not doc:
-                doc = DocModel(
-                    title=rd.title or os.path.basename(rd.file.name),
-                    original_file=rd.file,
-                    file_type=file_type,
-                    file_size=getattr(rd.file, 'size', 0),
-                    uploaded_by=rd.owner or request.user,
-                )
-                doc.save()
-            processor = DocumentProcessor(doc)
-            processor.process_document()
-            structured_html = doc.formatted_content or ''
-        except Exception as e:
-            print(f"⚠️ Error generating structured HTML via DocumentProcessor: {e}")
-            structured_html = ""
-        
+        # Générer le HTML structuré et le sauvegarder dans RawDocument
+        structured_html = rd.structured_html or ""
+        if not structured_html:
+            structured_html = generate_structured_html(rd, request.user)
+
         initial_data = {
             'title': rd.title or '',
             'type': rd.doc_type or '', 
@@ -361,33 +324,9 @@ def upload_pdf(request):
             metadata = extract_metadonnees(rd.file.path, rd.url or "") or {}
             text = extract_full_text(rd.file.path)
 
-            # Générer le HTML structuré (DocumentProcessor)
-            structured_html = ""
-            method = 'document_processor'
-            confidence = None
-            try:
-                from documents.models import Document as DocModel
-                from documents.utils.document_processor import DocumentProcessor
-                ext = os.path.splitext(rd.file.name)[1].lower().lstrip('.')
-                allowed = {'pdf', 'docx', 'doc', 'txt', 'html', 'xlsx', 'xls', 'rtf'}
-                file_type = ext if ext in allowed else 'pdf'
-                doc = DocModel.objects.filter(original_file=rd.file.name, uploaded_by=rd.owner or request.user).first()
-                if not doc:
-                    doc = DocModel(
-                        title=rd.title or os.path.basename(rd.file.name),
-                        original_file=rd.file,
-                        file_type=file_type,
-                        file_size=getattr(rd.file, 'size', 0),
-                        uploaded_by=rd.owner or request.user,
-                    )
-                    doc.save()
-                processor = DocumentProcessor(doc)
-                processor.process_document()
-                structured_html = doc.formatted_content or ''
-            except Exception as e:
-                print(f"⚠️ Error generating structured HTML via DocumentProcessor: {e}")
-                structured_html = ""
-            
+            # Générer et sauvegarder le HTML structuré immédiatement
+            structured_html = generate_structured_html(rd, request.user)
+
             # Save extracted metadata to the model
             if metadata:
                 rd.original_ai_metadata = metadata
@@ -401,10 +340,16 @@ def upload_pdf(request):
                 rd.language = metadata.get('language', '')
                 rd.url_source = metadata.get('url_source', rd.url or '')
                 rd.save()
-                
                 print(f"✅ Métadonnées LLM sauvegardées pour le document {rd.pk}")
 
-            # Create form for editing with initial data
+            # VALIDATION AUTOMATIQUE si bouton "Valider" cliqué
+            if 'validate' in request.POST:
+                # Valider le document avec extraction des pages
+                validate_document_with_pages(rd)
+                messages.success(request, 'Document validé avec succès.')
+                return redirect('rawdocs:document_list')
+
+            # Create form for editing
             initial_data = {
                 'title': rd.title or '',
                 'type': rd.doc_type or '', 
@@ -433,6 +378,86 @@ def upload_pdf(request):
 
     return render(request, 'rawdocs/upload.html', context)
 
+
+# Fonction helper pour générer le HTML structuré
+def generate_structured_html(raw_document, user):
+    """Génère et sauvegarde le HTML structuré pour un RawDocument"""
+    try:
+        from documents.models import Document as DocModel
+        from documents.utils.document_processor import DocumentProcessor
+        
+        ext = os.path.splitext(raw_document.file.name)[1].lower().lstrip('.')
+        allowed = {'pdf', 'docx', 'doc', 'txt', 'html', 'xlsx', 'xls', 'rtf'}
+        file_type = ext if ext in allowed else 'pdf'
+        
+        doc = DocModel.objects.filter(
+            original_file=raw_document.file.name, 
+            uploaded_by=raw_document.owner or user
+        ).first()
+        
+        if not doc:
+            doc = DocModel(
+                title=raw_document.title or os.path.basename(raw_document.file.name),
+                original_file=raw_document.file,
+                file_type=file_type,
+                file_size=getattr(raw_document.file, 'size', 0),
+                uploaded_by=raw_document.owner or user,
+            )
+            doc.save()
+        
+        processor = DocumentProcessor(doc)
+        processor.process_document()
+        structured_html = doc.formatted_content or ''
+        
+        # SAUVEGARDER dans RawDocument
+        raw_document.structured_html = structured_html
+        raw_document.structured_html_generated_at = timezone.now()
+        raw_document.structured_html_method = 'document_processor'
+        raw_document.structured_html_confidence = 0.0
+        raw_document.save()
+        
+        print(f"✅ HTML structuré généré et sauvé pour le document {raw_document.id}")
+        return structured_html
+        
+    except Exception as e:
+        print(f"⚠️ Erreur génération HTML structuré: {e}")
+        return ""
+
+
+# Fonction helper pour la validation avec extraction des pages
+def validate_document_with_pages(document):
+    """Valide un document et extrait ses pages"""
+    if not document.pages_extracted:
+        try:
+            from PyPDF2 import PdfReader
+            reader = PdfReader(document.file.path)
+            pages_text = [page.extract_text() or "" for page in reader.pages]
+
+            with transaction.atomic():
+                for page_num, page_text in enumerate(pages_text, 1):
+                    DocumentPage.objects.create(
+                        document=document,
+                        page_number=page_num,
+                        raw_text=page_text,
+                        cleaned_text=page_text
+                    )
+
+                document.total_pages = len(pages_text)
+                document.pages_extracted = True
+                document.is_validated = True
+                document.validated_at = timezone.now()
+                document.save()
+
+                print(f"✅ Document {document.id} validé avec {document.total_pages} pages")
+                
+        except Exception as e:
+            print(f"⚠️ Erreur extraction pages: {e}")
+            raise e
+    else:
+        # Juste marquer comme validé si déjà extrait
+        document.is_validated = True
+        document.validated_at = timezone.now()
+        document.save()
 
 @login_required(login_url='rawdocs:login')
 @user_passes_test(is_metadonneur)
@@ -610,12 +635,54 @@ def reextract_metadata(request, doc_id):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
-@login_required(login_url='rawdocs:login')
+@login_required
 @user_passes_test(is_metadonneur)
 def validate_document(request, doc_id):
     document = get_object_or_404(RawDocument, id=doc_id, owner=request.user)
 
     if request.method == 'POST':
+        # GÉNÉRER LE HTML STRUCTURÉ AVANT LA VALIDATION
+        if not document.structured_html:
+            try:
+                from documents.models import Document as DocModel
+                from documents.utils.document_processor import DocumentProcessor
+                
+                ext = os.path.splitext(document.file.name)[1].lower().lstrip('.')
+                allowed = {'pdf', 'docx', 'doc', 'txt', 'html', 'xlsx', 'xls', 'rtf'}
+                file_type = ext if ext in allowed else 'pdf'
+                
+                doc = DocModel.objects.filter(
+                    original_file=document.file.name, 
+                    uploaded_by=document.owner or request.user
+                ).first()
+                
+                if not doc:
+                    doc = DocModel(
+                        title=document.title or os.path.basename(document.file.name),
+                        original_file=document.file,
+                        file_type=file_type,
+                        file_size=getattr(document.file, 'size', 0),
+                        uploaded_by=document.owner or request.user,
+                    )
+                    doc.save()
+                
+                processor = DocumentProcessor(doc)
+                processor.process_document()
+                
+                # Sauvegarder le HTML structuré
+                document.structured_html = doc.formatted_content or ''
+                document.structured_html_generated_at = timezone.now()
+                document.structured_html_method = 'document_processor'
+                document.structured_html_confidence = 0.0
+                document.save()
+                
+                print(f"✅ HTML structuré généré lors de la validation du document {doc_id}")
+                
+            except Exception as e:
+                print(f"⚠️ Erreur génération HTML lors de validation: {e}")
+                messages.warning(request, f"Avertissement: Contenu structuré non généré: {str(e)}")
+
+        # Extraction des pages (votre code existant)
         if not document.pages_extracted:
             try:
                 reader = PdfReader(document.file.path)
@@ -632,7 +699,6 @@ def validate_document(request, doc_id):
 
                     document.total_pages = len(pages_text)
                     document.pages_extracted = True
-
                     document.is_validated = True
                     document.validated_at = timezone.now()
                     document.save()
@@ -640,12 +706,12 @@ def validate_document(request, doc_id):
                     messages.success(request, f"Document validé ({document.total_pages} pages)")
                     create_product_from_metadata(document)
                     return redirect('rawdocs:document_list')
+                    
             except Exception as e:
                 messages.error(request, f"Erreur lors de l'extraction: {str(e)}")
                 return redirect('rawdocs:document_list')
 
     return render(request, 'rawdocs/validate_document.html', {'document': document})
-
 
 # ——— Annotateur Views ——————————————————————————————
 
@@ -1303,46 +1369,208 @@ def delete_annotation_type(request):
     
 @login_required
 def view_original_document(request, document_id):
-    """View the original document PDF - RAWDOCS VERSION"""
+    """View the original document PDF - RAWDOCS VERSION AMÉLIORÉE"""
     document = get_object_or_404(RawDocument, id=document_id)
+    
+    # Paramètre pour téléchargement direct
+    download = request.GET.get('download', '0') == '1'
     
     # Case 1: Document has a local file
     if document.file:
         try:
-            # Serve the PDF file directly in browser
-            response = HttpResponse(document.file.read(), content_type='application/pdf')
-            response['Content-Disposition'] = f'inline; filename="{document.file.name}"'
+            # Réinitialiser la position du fichier
+            document.file.seek(0)
+            
+            # Lire le contenu du fichier
+            file_content = document.file.read()
+            
+            # Vérifier que le fichier n'est pas vide
+            if not file_content:
+                raise Exception("Le fichier PDF est vide")
+            
+            # Créer la réponse HTTP
+            response = HttpResponse(file_content, content_type='application/pdf')
+            
+            # Nom du fichier propre
+            filename = document.file.name
+            if not filename.lower().endswith('.pdf'):
+                filename += '.pdf'
+            
+            # Headers pour l'affichage dans le navigateur ou téléchargement
+            if download:
+                response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            else:
+                response['Content-Disposition'] = f'inline; filename="{filename}"'
+            
+            # Headers supplémentaires pour améliorer la compatibilité
+            # Dans votre vue view_original_document, après la ligne response = HttpResponse(file_content, content_type='application/pdf')
+            response['X-Frame-Options'] = 'SAMEORIGIN'  # Permettre iframe sur même domaine
+            response['Content-Security-Policy'] = "frame-ancestors 'self'"
+            response['X-PDF-Options'] = 'toolbar=yes,scrollbars=yes,location=no,menubar=yes'
+                        
             return response
+            
         except Exception as e:
-            # If file doesn't exist, show error
-            return HttpResponse(
-                f"<html><body><h2>Erreur</h2>"
-                f"<p>Le fichier PDF n'a pas pu être chargé: {str(e)}</p>"
-                f"<script>window.close();</script></body></html>"
-            )
-    
+            # Logging pour débugger
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Erreur lors du chargement du PDF {document_id}: {str(e)}")
+            
+            # Page d'erreur avec plus d'informations
+            error_html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Erreur - PDF non disponible</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; margin: 40px; background: #f8fafc; }}
+                    .error-container {{ background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 600px; margin: 0 auto; }}
+                    .error-icon {{ font-size: 48px; color: #ef4444; margin-bottom: 20px; }}
+                    h2 {{ color: #dc2626; margin: 0 0 16px 0; }}
+                    p {{ color: #6b7280; line-height: 1.6; }}
+                    .btn {{ background: #3b82f6; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; margin-right: 10px; }}
+                    .btn:hover {{ background: #2563eb; }}
+                    .btn-secondary {{ background: #6b7280; }}
+                    .btn-secondary:hover {{ background: #4b5563; }}
+                    .details {{ background: #f3f4f6; padding: 15px; border-radius: 6px; margin: 20px 0; font-size: 14px; }}
+                </style>
+            </head>
+            <body>
+                <div class="error-container">
+                    <div class="error-icon">📄❌</div>
+                    <h2>Fichier PDF non accessible</h2>
+                    <p>Le fichier PDF n'a pas pu être chargé. Cela peut être dû à :</p>
+                    <ul>
+                        <li>Le fichier a été déplacé ou supprimé</li>
+                        <li>Problème de permissions d'accès</li>
+                        <li>Fichier corrompu</li>
+                        <li>Problème temporaire du serveur</li>
+                    </ul>
+                    
+                    <div class="details">
+                        <strong>Détails techniques :</strong><br>
+                        Document ID: {document_id}<br>
+                        Fichier: {document.file.name if document.file else 'N/A'}<br>
+                        Erreur: {str(e)}
+                    </div>
+                    
+                    <div>
+                        <a href="javascript:history.back()" class="btn">← Retour</a>
+                        <a href="javascript:location.reload()" class="btn btn-secondary">🔄 Réessayer</a>
+                    </div>
+                </div>
+                
+                <script>
+                    // Notifier le parent si on est dans une iframe
+                    if (window.parent !== window) {{
+                        window.parent.postMessage({{
+                            type: 'pdf-load-error',
+                            message: 'Erreur de chargement du PDF'
+                        }}, '*');
+                    }}
+                </script>
+            </body>
+            </html>
+            """
+            return HttpResponse(error_html, status=500)
+
     # Case 2: Document was uploaded via URL
     elif document.url:
         try:
-            # Redirect to the original URL
-            return redirect(document.url)
+            if download:
+                # Redirection vers l'URL pour téléchargement
+                return redirect(document.url)
+            else:
+                # Pour les URLs, on redirige directement
+                response = redirect(document.url)
+                return response
+                
         except Exception as e:
-            return HttpResponse(
-                f"<html><body><h2>Erreur</h2>"
-                f"<p>Impossible d'accéder au document via URL: {str(e)}</p>"
-                f"<p><a href='{document.url}' target='_blank'>Essayer d'ouvrir directement: {document.url}</a></p>"
-                f"<script>window.close();</script></body></html>"
-            )
-    
+            error_html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>URL non accessible</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; margin: 40px; background: #f8fafc; }}
+                    .error-container {{ background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 600px; margin: 0 auto; }}
+                    .error-icon {{ font-size: 48px; color: #f59e0b; margin-bottom: 20px; }}
+                    h2 {{ color: #d97706; margin: 0 0 16px 0; }}
+                    p {{ color: #6b7280; line-height: 1.6; }}
+                    .btn {{ background: #3b82f6; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; margin-right: 10px; }}
+                    a {{ color: #3b82f6; }}
+                </style>
+            </head>
+            <body>
+                <div class="error-container">
+                    <div class="error-icon">🌐❌</div>
+                    <h2>URL non accessible</h2>
+                    <p>L'URL source du document n'est pas accessible actuellement.</p>
+                    
+                    <p><strong>URL source :</strong><br>
+                    <a href="{document.url}" target="_blank">{document.url}</a></p>
+                    
+                    <p>Vous pouvez essayer de :</p>
+                    <ul>
+                        <li><a href="{document.url}" target="_blank">Ouvrir l'URL directement dans un nouvel onglet</a></li>
+                        <li>Vérifier votre connexion internet</li>
+                        <li>Réessayer plus tard</li>
+                    </ul>
+                    
+                    <div>
+                        <a href="javascript:history.back()" class="btn">← Retour</a>
+                    </div>
+                </div>
+                
+                <script>
+                    if (window.parent !== window) {{
+                        window.parent.postMessage({{
+                            type: 'pdf-load-error',
+                            message: 'URL non accessible'
+                        }}, '*');
+                    }}
+                </script>
+            </body>
+            </html>
+            """
+            return HttpResponse(error_html, status=500)
+
     # Case 3: No file and no URL
     else:
-        return HttpResponse(
-            "<html><body><h2>Aucun fichier disponible</h2>"
-            "<p>Ce document n'a ni fichier PDF ni URL source associé.</p>"
-            "<script>window.close();</script></body></html>"
-        )
-
-
+        error_html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Aucun fichier disponible</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 40px; background: #f8fafc; }
+                .error-container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 600px; margin: 0 auto; text-align: center; }
+                .error-icon { font-size: 48px; color: #6b7280; margin-bottom: 20px; }
+                h2 { color: #374151; margin: 0 0 16px 0; }
+                p { color: #6b7280; line-height: 1.6; }
+                .btn { background: #3b82f6; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; }
+            </style>
+        </head>
+        <body>
+            <div class="error-container">
+                <div class="error-icon">📄</div>
+                <h2>Aucun fichier disponible</h2>
+                <p>Ce document n'a ni fichier PDF ni URL source associé.</p>
+                <a href="javascript:history.back()" class="btn">← Retour</a>
+            </div>
+            
+            <script>
+                if (window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'pdf-load-error',
+                        message: 'Aucun fichier disponible'
+                    }, '*');
+                }
+            </script>
+        </body>
+        </html>
+        """
+        return HttpResponse(error_html, status=404)
 
 @login_required
 def document_structured(request, document_id):
@@ -1440,87 +1668,122 @@ def document_structured(request, document_id):
 @require_POST
 def save_structured_edits(request, document_id):
     try:
-        data = json.loads(request.body)
+        # Lire le body par chunks pour éviter les dépassements mémoire
+        body_unicode = request.body.decode('utf-8')
+        
+        # Vérifier la taille avant de parser
+        body_size = len(body_unicode)
+        max_size = 20 * 1024 * 1024  # 20MB
+        
+        if body_size > max_size:
+            return JsonResponse({
+                'success': False, 
+                'error': f'Données trop volumineuses ({body_size / 1024 / 1024:.1f}MB). Maximum autorisé: {max_size / 1024 / 1024}MB'
+            }, status=413)
+        
+        data = json.loads(body_unicode)
         edits = data.get('edits', [])
         extraction_score = data.get('extraction_score', None)
         formatted_content = data.get('formatted_content')
 
-        # Nouveau: sauvegarde du HTML complet si fourni (comme documents.save_document_edits)
+        # Si c'est une sauvegarde complète du HTML (cas lourd)
         if (not edits) and formatted_content:
             document = get_object_or_404(RawDocument, id=document_id, owner=request.user)
+            
+            # Compresser le contenu si trop volumineux
+            if len(formatted_content) > 5 * 1024 * 1024:  # 5MB
+                print(f"⚠️ Contenu HTML volumineux ({len(formatted_content)/1024/1024:.1f}MB) - compression recommandée")
+            
             document.structured_html = formatted_content
             document.structured_html_generated_at = timezone.now()
-            try:
-                document.structured_html_method = 'manual_edit'
-            except Exception:
-                pass
+            document.structured_html_method = 'manual_edit'
+            
             if extraction_score is not None:
-                try:
-                    document.extraction_score = extraction_score
-                except Exception:
-                    pass
-            # Sauvegarder
-            try:
-                update_fields = ['structured_html', 'structured_html_generated_at']
-                if hasattr(document, 'structured_html_method'):
-                    update_fields.append('structured_html_method')
-                if extraction_score is not None and hasattr(document, 'extraction_score'):
-                    update_fields.append('extraction_score')
-                document.save(update_fields=update_fields)
-            except Exception:
-                document.save()
+                document.extraction_score = extraction_score
+                
+            document.save()
 
             return JsonResponse({
                 'success': True,
                 'message': 'Modifications sauvegardées avec succès',
                 'updated_count': 0,
                 'total_elements': 0,
-                'extraction_score': extraction_score
+                'extraction_score': extraction_score,
+                'content_size': f"{len(formatted_content)/1024/1024:.1f}MB"
             })
 
+        # Traitement des modifications ponctuelles (plus léger)
         if not edits:
-            return JsonResponse({'success': False, 'error': 'No edits provided'}, status=400)
+            return JsonResponse({'success': False, 'error': 'Aucune modification fournie'}, status=400)
 
         document = get_object_or_404(RawDocument, id=document_id, owner=request.user)
         if not document.structured_html:
-            return JsonResponse({'success': False, 'error': 'No structured HTML to edit'}, status=400)
+            return JsonResponse({'success': False, 'error': 'Aucun HTML structuré à modifier'}, status=400)
+
+        # Parser avec limite de taille
+        html_size = len(document.structured_html)
+        if html_size > 10 * 1024 * 1024:  # 10MB
+            return JsonResponse({
+                'success': False, 
+                'error': f'HTML trop volumineux pour modification ({html_size/1024/1024:.1f}MB)'
+            }, status=413)
 
         soup = BeautifulSoup(document.structured_html, 'html.parser')
         updated_count = 0
         total_elements = len(soup.find_all(class_='editable-content'))
 
+        # Traitement des modifications avec limitation
+        max_edits = 1000
+        if len(edits) > max_edits:
+            return JsonResponse({
+                'success': False, 
+                'error': f'Trop de modifications ({len(edits)}). Maximum: {max_edits}'
+            }, status=413)
+
         for edit in edits:
             element_id = edit.get('element_id')
             new_text = edit.get('new_text', '').strip()
+            
             if not element_id:
                 continue
+                
+            # Limiter la taille du nouveau texte
+            if len(new_text) > 10000:  # 10KB par élément
+                new_text = new_text[:10000]
+                print(f"⚠️ Texte tronqué pour l'élément {element_id}")
 
-            # Chercher l'élément par data-element-id
             element = soup.find(attrs={'data-element-id': element_id})
             if element:
                 old_text = element.get_text().strip()
-                # Remplacer le contenu de l'élément
                 element.clear()
                 element.string = new_text
                 updated_count += 1
 
-                # Log des modifications
+                # Log avec limitation
                 MetadataLog.objects.create(
                     document=document,
-                    field_name='edited_text_' + element_id,
-                    old_value=old_text,
-                    new_value=new_text,
+                    field_name='edited_text_' + element_id[:50],  # Limiter la longueur
+                    old_value=old_text[:1000],  # Limiter à 1KB
+                    new_value=new_text[:1000],  # Limiter à 1KB
                     modified_by=request.user
                 )
 
         if updated_count > 0:
-            document.structured_html = str(soup)
+            new_html = str(soup)
+            
+            # Vérifier la taille finale
+            if len(new_html) > 15 * 1024 * 1024:  # 15MB
+                return JsonResponse({
+                    'success': False, 
+                    'error': f'HTML résultant trop volumineux ({len(new_html)/1024/1024:.1f}MB)'
+                }, status=413)
+                
+            document.structured_html = new_html
             if extraction_score is not None:
                 document.extraction_score = extraction_score
             document.structured_html_generated_at = timezone.now()
             document.save()
 
-        # Préparer le message de succès
         message = f'{updated_count} élément(s) mis à jour avec succès.'
         if extraction_score is not None:
             message += f' Score d\'extraction : {extraction_score:.2f}%'
@@ -1532,12 +1795,16 @@ def save_structured_edits(request, document_id):
             'total_elements': total_elements,
             'extraction_score': extraction_score
         })
+        
     except json.JSONDecodeError:
-        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+        return JsonResponse({'success': False, 'error': 'JSON invalide'}, status=400)
+    except MemoryError:
+        return JsonResponse({'success': False, 'error': 'Mémoire insuffisante pour traiter cette requête'}, status=507)
     except Exception as e:
         print(f"Error in save_structured_edits: {str(e)}")
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        return JsonResponse({'success': False, 'error': f'Erreur serveur: {str(e)}'}, status=500)
 
+        
 @login_required
 def document_detail(request, document_id):
     """

@@ -2429,68 +2429,106 @@ body {
 </section>
 
 <!-- Main Text Content avec l'élément page-text OBLIGATOIRE -->
+<!-- Main Text Content avec l'élément page-text OBLIGATOIRE -->
 <section class="text-content-card main-content" style="margin-top: 3rem;">
-  <h3>
-    <i class="fas fa-file-text"></i>
-    Page {{ current_page.page_number }} - Zone d'Annotation Principale
-    {% if current_page.is_validated_by_human %}
-      <span class="page-status validated-human">Validée par humain</span>
-    {% elif current_page.is_annotated %}
-      <span class="page-status annotated">Annotée</span>
-    {% else %}
-      <span class="page-status pending">En attente</span>
-    {% endif %}
-    {% if current_page.is_regulatory_analyzed %}
-      <span class="page-status" style="background: #e0f2fe; color: var(--pharma-info);">Analysée réglementairement</span>
-    {% endif %}
-  </h3>
-
-  <!-- ÉLÉMENT MANQUANT CRITIQUE POUR L'ANNOTATION -->
-  <div class="text-content" id="page-text" data-page-id="{{ current_page.id }}">{{ current_page.cleaned_text }}</div>
-
-  <!-- Extracted Text Section (votre code existant) -->
-  {% if extracted_text %}
-  <div class="text-card">
-    <h3 class="card-title">
-      <i class="fas fa-file-alt"></i> Contenu structuré extrait
-    </h3>
-
-    <!-- Onglets pour choisir l'affichage -->
-    <div class="content-tabs" style="margin-bottom: 1rem;">
-      <button class="tab-btn active" onclick="showTab('structured')" id="structured-tab">
-        <i class="fas fa-layer-group"></i> Vue structurée
-      </button>
-      <button class="tab-btn" onclick="showTab('text')" id="text-tab">
-        <i class="fas fa-align-left"></i> Texte brut
-      </button>
-    </div>
-
-    <!-- Contenu structuré (par défaut) -->
-    <div id="structured-content" class="content-panel active">
-      {% if structured_html %}
-        <div class="structured-display">
-          {{ structured_html|safe }}
+  <div class="annotation-main-header">
+    <div class="header">
+      <div class="main-info">
+        <div class="icon-container">
+          <div class="icon-chip">
+            <i class="fas fa-edit"></i>
+          </div>
         </div>
-      {% else %}
-        <div class="fallback-message">
-          <i class="fas fa-exclamation-triangle"></i>
-          Le contenu structuré n'a pas pu être généré. Affichage du texte brut ci-dessous.
+        <div class="title-section">
+          <h3>Zone d'Annotation Principale</h3>
+          <div class="details">
+            <span class="meta-badge info">
+              <i class="fas fa-file-alt"></i> Page {{ current_page.page_number }}
+            </span>
+            {% if current_page.is_validated_by_human %}
+              <span class="meta-badge success">Validée par humain</span>
+            {% elif current_page.is_annotated %}
+              <span class="meta-badge warning">Annotée</span>
+            {% else %}
+              <span class="meta-badge danger">En attente</span>
+            {% endif %}
+            {% if current_page.is_regulatory_analyzed %}
+              <span class="meta-badge primary">Analysée réglementairement</span>
+            {% endif %}
+          </div>
         </div>
-        <div class="text-content">
-          <pre>{{ extracted_text }}</pre>
-        </div>
-      {% endif %}
-    </div>
-
-    <!-- Contenu texte brut (caché par défaut) -->
-    <div id="text-content" class="content-panel" style="display: none;">
-      <pre>{{ extracted_text }}</pre>
+      </div>
+      <div class="actions">
+        <button class="toggle-content-btn" onclick="toggleMainContent()" title="Masquer/Afficher la zone d'annotation">
+          <i class="fas fa-eye-slash"></i>
+          <span>Masquer</span>
+        </button>
+      </div>
     </div>
   </div>
-  {% endif %}
+
+  <!-- Zone de contenu principal -->
+  <div id="main-content-container" class="main-content-container">
+    <div class="text-content" id="page-text" data-page-id="{{ current_page.id }}">
+      {{ current_page.cleaned_text }}
+    </div>
+  </div>
 </section>
 
 <style>
+
+/* Styles pour l'en-tête de la zone d'annotation principale */
+.annotation-main-header {
+  background: linear-gradient(135deg, var(--pharma-accent, #16a34a) 0%, var(--pharma-info, #38bdf8) 40%, var(--pharma-primary, #3b82f6) 100%);
+  border-radius: 20px;
+  padding: 24px;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 20px;
+  box-shadow: var(--pharma-shadow);
+}
+
+.annotation-main-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 50%, rgba(255,255,255,.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(255,255,255,.08) 0%, transparent 50%),
+    radial-gradient(circle at 40% 80%, rgba(255,255,255,.06) 0%, transparent 50%);
+  animation: float 20s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.main-content-container {
+  transition: all 0.3s ease;
+}
+
+.main-content-container.collapsed {
+  display: none;
+}
+
+/* Styles pour les badges de statut */
+.meta-badge.success {
+  background: rgba(34,197,94,0.15);
+  border-color: rgba(34,197,94,0.3);
+}
+
+.meta-badge.warning {
+  background: rgba(251,191,36,0.15);
+  border-color: rgba(251,191,36,0.3);
+}
+
+.meta-badge.danger {
+  background: rgba(239,68,68,0.15);
+  border-color: rgba(239,68,68,0.3);
+}
+
+.meta-badge.primary {
+  background: rgba(59,130,246,0.15);
+  border-color: rgba(59,130,246,0.3);
+}
 
 /* Styles améliorés pour la section structurée */
 .structured-content-section {
@@ -2767,9 +2805,9 @@ body {
     filter: blur(8px);
 }
 
-.sh-content { 
-    position: relative; 
-    z-index: 2; 
+.sh-content {
+    position: relative;
+    z-index: 2;
 }
 
 .header {
@@ -2787,9 +2825,9 @@ body {
     min-width: 0;
 }
 
-.icon-container { 
-    position: relative; 
-    flex-shrink: 0; 
+.icon-container {
+    position: relative;
+    flex-shrink: 0;
 }
 
 .icon-chip {
@@ -2816,8 +2854,8 @@ body {
     transition: transform 0.6s;
 }
 
-.icon-chip:hover::before { 
-    transform: translateX(100%); 
+.icon-chip:hover::before {
+    transform: translateX(100%);
 }
 
 .icon-chip:hover {
@@ -2825,16 +2863,16 @@ body {
     box-shadow: 0 12px 24px rgba(0,0,0,0.15);
 }
 
-.icon-chip i { 
-    font-size: 24px; 
-    color: #fff; 
-    z-index: 1; 
-    position: relative; 
+.icon-chip i {
+    font-size: 24px;
+    color: #fff;
+    z-index: 1;
+    position: relative;
 }
 
-.title-section { 
-    min-width: 0; 
-    flex: 1; 
+.title-section {
+    min-width: 0;
+    flex: 1;
 }
 
 .header h3 {
@@ -2857,11 +2895,11 @@ body {
     opacity: 0.95;
 }
 
-.metadata p { 
-    display: flex; 
-    align-items: center; 
-    gap: 6px; 
-    font-weight: 500; 
+.metadata p {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
     margin: 0;
 }
 
@@ -2876,12 +2914,12 @@ body {
 .metadata p:nth-child(2)::before { content: '\f017'; } /* clock */
 .metadata p:nth-child(3)::before { content: '\f0ad'; } /* wrench */
 
-.actions { 
-    display: flex; 
-    gap: 10px; 
-    flex-wrap: wrap; 
-    justify-content: flex-end; 
-    align-items: flex-start; 
+.actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: flex-start;
 }
 
 .btn {
@@ -2911,11 +2949,11 @@ body {
     text-decoration: none;
 }
 
-.btn-primary { 
-    background: rgba(255,255,255,0.2); 
-    border-color: rgba(255,255,255,0.3); 
-    position: relative; 
-    overflow: hidden; 
+.btn-primary {
+    background: rgba(255,255,255,0.2);
+    border-color: rgba(255,255,255,0.3);
+    position: relative;
+    overflow: hidden;
 }
 
 .btn-primary::before {
@@ -2927,19 +2965,19 @@ body {
     transition: transform 0.6s;
 }
 
-.btn-primary:hover::before { 
-    transform: translateX(100%); 
+.btn-primary:hover::before {
+    transform: translateX(100%);
 }
 
-.btn-primary:hover { 
-    background: rgba(255,255,255,0.25); 
-    transform: translateY(-2px); 
+.btn-primary:hover {
+    background: rgba(255,255,255,0.25);
+    transform: translateY(-2px);
 }
 
 .details {
-    display: flex; 
-    flex-wrap: wrap; 
-    gap: 8px; 
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .meta-badge {
@@ -2957,32 +2995,32 @@ body {
     transition: all 0.3s ease;
 }
 
-.meta-badge:hover { 
-    background: rgba(255,255,255,0.18); 
-    transform: translateY(-1px); 
+.meta-badge:hover {
+    background: rgba(255,255,255,0.18);
+    transform: translateY(-1px);
 }
 
-.meta-badge i { 
-    opacity: 0.9; 
-    font-size: 0.75rem; 
+.meta-badge i {
+    opacity: 0.9;
+    font-size: 0.75rem;
 }
 
-.meta-badge.success { 
-    background: rgba(34,197,94,0.15); 
-    border-color: rgba(34,197,94,0.3); 
-    color: #fff; 
+.meta-badge.success {
+    background: rgba(34,197,94,0.15);
+    border-color: rgba(34,197,94,0.3);
+    color: #fff;
 }
 
-.meta-badge.warning { 
-    background: rgba(251,191,36,0.15); 
-    border-color: rgba(251,191,36,0.3); 
-    color: #fff; 
+.meta-badge.warning {
+    background: rgba(251,191,36,0.15);
+    border-color: rgba(251,191,36,0.3);
+    color: #fff;
 }
 
-.meta-badge.info { 
-    background: rgba(59,130,246,0.15); 
-    border-color: rgba(59,130,246,0.3); 
-    color: #fff; 
+.meta-badge.info {
+    background: rgba(59,130,246,0.15);
+    border-color: rgba(59,130,246,0.3);
+    color: #fff;
 }
 
 .structured-content-card {
@@ -3063,56 +3101,56 @@ body {
 
 /* Responsive */
 @media (max-width: 768px) {
-    .structured-content-header { 
-        padding: 16px; 
-        border-radius: 16px; 
+    .structured-content-header {
+        padding: 16px;
+        border-radius: 16px;
     }
-    
-    .header { 
-        grid-template-columns: 1fr; 
-        gap: 16px; 
+
+    .header {
+        grid-template-columns: 1fr;
+        gap: 16px;
     }
-    
-    .main-info { 
-        gap: 12px; 
+
+    .main-info {
+        gap: 12px;
     }
-    
-    .icon-chip { 
-        width: 50px; 
-        height: 50px; 
-        border-radius: 12px; 
+
+    .icon-chip {
+        width: 50px;
+        height: 50px;
+        border-radius: 12px;
     }
-    
-    .icon-chip i { 
-        font-size: 20px; 
+
+    .icon-chip i {
+        font-size: 20px;
     }
-    
-    .header h3 { 
-        font-size: 1.25rem; 
+
+    .header h3 {
+        font-size: 1.25rem;
     }
-    
-    .metadata { 
-        flex-direction: column; 
-        gap: 6px; 
+
+    .metadata {
+        flex-direction: column;
+        gap: 6px;
     }
-    
-    .actions { 
-        justify-content: flex-start; 
-        gap: 6px; 
+
+    .actions {
+        justify-content: flex-start;
+        gap: 6px;
     }
-    
-    .btn { 
-        padding: 8px 12px; 
-        font-size: 0.8rem; 
+
+    .btn {
+        padding: 8px 12px;
+        font-size: 0.8rem;
     }
-    
-    .details { 
-        gap: 6px; 
+
+    .details {
+        gap: 6px;
     }
-    
-    .meta-badge { 
-        padding: 6px 10px; 
-        font-size: 0.75rem; 
+
+    .meta-badge {
+        padding: 6px 10px;
+        font-size: 0.75rem;
     }
 
     .structured-content-body {
@@ -3121,19 +3159,19 @@ body {
 }
 
 @media (max-width: 480px) {
-    .main-info { 
-        flex-direction: column; 
-        align-items: flex-start; 
-        gap: 12px; 
+    .main-info {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
     }
-    
-    .actions { 
-        width: 100%; 
+
+    .actions {
+        width: 100%;
     }
-    
-    .btn { 
-        flex: 1; 
-        justify-content: center; 
+
+    .btn {
+        flex: 1;
+        justify-content: center;
     }
 }
 
@@ -3151,6 +3189,61 @@ body {
 </style>
 
 <script>
+function toggleMainContent() {
+    const container = document.getElementById('main-content-container');
+    const btn = document.querySelector('.text-content-card .toggle-content-btn');
+    const btnIcon = btn.querySelector('i');
+    const btnText = btn.querySelector('span');
+
+    if (container.classList.contains('collapsed')) {
+        // Afficher le contenu
+        container.classList.remove('collapsed');
+        container.style.animation = 'fadeInDown 0.3s ease-out';
+        btnIcon.className = 'fas fa-eye-slash';
+        btnText.textContent = 'Masquer';
+        btn.classList.remove('btn-show');
+    } else {
+        // Masquer le contenu
+        container.style.animation = 'fadeOutUp 0.3s ease-out';
+        setTimeout(() => {
+            container.classList.add('collapsed');
+        }, 280);
+        btnIcon.className = 'fas fa-eye';
+        btnText.textContent = 'Afficher';
+        btn.classList.add('btn-show');
+    }
+}
+
+// S'assurer que l'animation est définie
+if (!document.querySelector('style#animation-styles')) {
+    const style = document.createElement('style');
+    style.id = 'animation-styles';
+    style.textContent = `
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeOutUp {
+            from {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+        }
+    `;
+    document.head.appendChild(style);
+}
+
 // JavaScript pour la gestion du contenu structuré dans l'annotateur
 
 function toggleStructuredContent() {
