@@ -54,8 +54,9 @@
     flex: 1;
     overflow: auto;
     position: relative;
+    padding-right: 80px;
   }
-  
+
   /* Right Panel - PDF Original */
   .pdf-panel {
     flex: 1;
@@ -66,7 +67,7 @@
     display: flex;
     flex-direction: column;
   }
-  
+
   .pdf-panel-header {
     background: linear-gradient(135deg, #dc2626 0%, #ef4444 40%, #f97316 100%);
     color: white;
@@ -76,18 +77,18 @@
     align-items: center;
     justify-content: space-between;
   }
-  
+
   .pdf-panel-content {
     flex: 1;
     overflow: hidden;
   }
-  
+
   .pdf-frame {
     width: 100%;
     height: 100%;
     border: none;
   }
-  
+
   /* Resizer entre les deux panneaux */
   .panel-resizer {
     width: 4px;
@@ -96,11 +97,11 @@
     position: relative;
     transition: background-color 0.2s;
   }
-  
+
   .panel-resizer:hover {
     background: #3b82f6;
   }
-  
+
   .panel-resizer::after {
     content: '';
     position: absolute;
@@ -112,14 +113,14 @@
     background: #9ca3af;
     border-radius: 2px;
   }
-  
+
   /* Toggle Buttons */
   .view-toggle {
     display: flex;
     gap: 8px;
     margin-bottom: 16px;
   }
-  
+
   .view-toggle button {
     padding: 8px 16px;
     border: 1px solid #e5e7eb;
@@ -128,27 +129,27 @@
     cursor: pointer;
     font-weight: 500;
   }
-  
+
   .view-toggle button.active {
     background: #3b82f6;
     color: white;
     border-color: #3b82f6;
   }
-  
+
   .view-toggle button:hover:not(.active) {
     background: #f9fafb;
   }
-  
+
   /* Single View Mode */
   .single-view .pdf-panel,
   .single-view .panel-resizer {
     display: none;
   }
-  
+
   .single-view.pdf-only .structured-panel {
     display: none;
   }
-  
+
   .single-view.pdf-only .pdf-panel,
   .single-view.pdf-only .panel-resizer {
     display: flex;
@@ -159,7 +160,7 @@
     display: flex;
     gap: 6px;
   }
-  
+
   .toolbar-actions button {
     border: 1px solid rgba(255,255,255,0.3);
     background: rgba(255,255,255,0.1);
@@ -169,43 +170,84 @@
     font-size: .85rem;
     cursor: pointer;
   }
-  
+
   .toolbar-actions button:hover {
     background: rgba(255,255,255,0.2);
   }
 
   /* Floating zoom controls */
   .floating-zoom-controls {
-    position: absolute;
-    right: 16px;
-    bottom: 16px;
-    display: flex;
+    position: sticky;
+    bottom: 24px;
+    margin-left: auto;
+    margin-right: 24px;
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
-    background: rgba(255, 255, 255, 0.9);
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-    border-radius: 12px;
-    backdrop-filter: blur(8px);
+    gap: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    backdrop-filter: none;
     z-index: 100;
   }
-  
-  .floating-zoom-controls .btn {
+
+  .floating-zoom-controls .floating-btn {
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
-    border: 1px solid #e5e7eb;
-    background: white;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(14, 165, 233, 0.95));
+    box-shadow: 0 18px 35px rgba(37, 99, 235, 0.25);
+    color: white;
     cursor: pointer;
+    margin-left: 12px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    overflow: hidden;
   }
-  
-  .floating-zoom-controls .btn:hover { background: #f9fafb; }
-  .floating-zoom-controls .divider { width: 1px; height: 20px; background: #e5e7eb; margin: 0 4px; }
-  .floating-zoom-controls .zoom-label { min-width: 48px; text-align: center; font-variant-numeric: tabular-nums; color: #374151; font-size: 0.85rem; }
+
+  .floating-zoom-controls .floating-btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.65), transparent 60%);
+    pointer-events: none;
+  }
+
+  .floating-zoom-controls .floating-btn:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 28px 45px rgba(37, 99, 235, 0.3);
+  }
+
+  .floating-zoom-controls .floating-btn.secondary {
+    background: linear-gradient(135deg, rgba(129, 140, 248, 0.95), rgba(165, 180, 252, 0.95));
+    box-shadow: 0 14px 30px rgba(99, 102, 241, 0.25);
+  }
+
+  .floating-zoom-controls .floating-btn.secondary:hover {
+    box-shadow: 0 22px 40px rgba(99, 102, 241, 0.3);
+  }
+
+  .floating-zoom-controls .zoom-label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 56px;
+    height: 44px;
+    margin-left: 12px;
+    padding: 0 16px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.85);
+    color: #1f2937;
+    font-size: 0.9rem;
+    font-weight: 600;
+    box-shadow: 0 12px 30px rgba(37, 99, 235, 0.15);
+  }
 
   /* Zoom container */
   #zoomContainer {
@@ -221,7 +263,7 @@
   .edit-mode .pdf-text-element[contenteditable="true"], .edit-mode .pdf-cell[contenteditable="true"] {
     background: rgba(14,165,233,0.06);
   }
-  
+
   /* Toast */
   #ds-toast { position: fixed; top: 16px; right: 16px; z-index: 2000; display: none; }
   #ds-toast .toast-box {
@@ -232,25 +274,25 @@
   #ds-toast.error .toast-box { background: rgba(239,68,68,0.95); }
 
 /* Structured header */
-  .structured-header { 
-    position: relative; 
-    overflow: hidden; 
-    border-radius: 24px; 
-    padding: 24px; 
-    color: #fff; 
-    background: linear-gradient(135deg, var(--primary, #3b82f6) 0%, var(--primary-light, #60a5fa) 40%, var(--secondary, #8b5cf6) 100%); 
-    box-shadow: 0 25px 50px -12px rgba(0,0,0,.25), 0 0 0 1px rgba(255,255,255,.05) inset; 
-    margin-bottom: 16px; 
-    border: none; 
-    backdrop-filter: blur(20px); 
+  .structured-header {
+    position: relative;
+    overflow: hidden;
+    border-radius: 24px;
+    padding: 24px;
+    color: #fff;
+    background: linear-gradient(135deg, var(--primary, #3b82f6) 0%, var(--primary-light, #60a5fa) 40%, var(--secondary, #8b5cf6) 100%);
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,.25), 0 0 0 1px rgba(255,255,255,.05) inset;
+    margin-bottom: 16px;
+    border: none;
+    backdrop-filter: blur(20px);
   }
-  .structured-header::before { 
-    content:''; 
-    position:absolute; 
-    inset:0; 
-    background: radial-gradient(circle at 20% 50%, rgba(255,255,255,.1) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(255,255,255,.08) 0%, transparent 50%), radial-gradient(circle at 40% 80%, rgba(255,255,255,.06) 0%, transparent 50%); 
-    animation: float 20s ease-in-out infinite; 
-    pointer-events: none; 
+  .structured-header::before {
+    content:'';
+    position:absolute;
+    inset:0;
+    background: radial-gradient(circle at 20% 50%, rgba(255,255,255,.1) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(255,255,255,.08) 0%, transparent 50%), radial-gradient(circle at 40% 80%, rgba(255,255,255,.06) 0%, transparent 50%);
+    animation: float 20s ease-in-out infinite;
+    pointer-events: none;
   }
   @keyframes float { 0%,100%{transform:translateY(0) rotate(0)} 33%{transform:translateY(-10px) rotate(1deg)} 66%{transform:translateY(5px) rotate(-1deg)} }
   .sh-content{ position:relative; z-index:2 }
@@ -269,11 +311,11 @@
       flex-direction: column;
       height: auto;
     }
-    
+
     .panel-resizer {
       display: none;
     }
-    
+
     .structured-panel, .pdf-panel {
       min-height: 400px;
     }
@@ -375,16 +417,15 @@
       {% endif %}
 
       <!-- Floating Zoom Controls for Structured Content -->
-      <div class="floating-zoom-controls">
-        <button class="btn" type="button" id="zoomOutBtn" title="Zoom -">
+      <div class="floating-zoom-controls" aria-label="Contrôles de zoom">
+        <button class="floating-btn" type="button" id="zoomOutBtn" title="Zoom -">
           <i class="fas fa-search-minus" aria-hidden="true"></i>
         </button>
         <span class="zoom-label" id="zoomLabel">100%</span>
-        <button class="btn" type="button" id="zoomInBtn" title="Zoom +">
+        <button class="floating-btn" type="button" id="zoomInBtn" title="Zoom +">
           <i class="fas fa-search-plus" aria-hidden="true"></i>
         </button>
-        <div class="divider"></div>
-        <button class="btn" type="button" id="zoomResetBtn" title="Réinitialiser">
+        <button class="floating-btn secondary" type="button" id="zoomResetBtn" title="Réinitialiser">
           <i class="fas fa-compress" aria-hidden="true"></i>
         </button>
       </div>
