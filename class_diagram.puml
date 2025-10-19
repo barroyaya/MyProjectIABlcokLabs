@@ -1,0 +1,767 @@
+@startuml
+title Diagramme de Classes - Système d'Enrichissement de Documents Pharmaceutiques
+
+!define BUSINESS_COLOR #E8F4FD
+!define SYSTEM_COLOR #FFF2CC
+!define EXPERT_COLOR #D5E8D4
+!define AI_COLOR #FFE6CC
+
+' ===========================
+' UTILISATEURS
+' ===========================
+
+abstract class Utilisateur {
+  - id: UUID
+  - nom: String
+  - email: String
+  - motDePasse: String
+  - dateCreation: DateTime
+  - derniereConnexion: DateTime
+  --
+  + seConnecter(): boolean
+  + seDeconnecter(): void
+  + modifierProfil(): void
+}
+
+class Metadonneur {
+  - niveauAcces: String
+  --
+  + telechargerPDF(fichier: File): Document
+  + visualiserDocument(docId: UUID): Document
+  + naviguerPages(docId: UUID, page: int): Page
+  + selectionnerTexte(selection: TexteSelection): void
+  + gererMetadonnees(docId: UUID, metadata: Map): void
+}
+
+class ExpertPharmaceutique {
+  - specialite: String
+  - certifications: List<String>
+  - experience: int
+  --
+  + enrichirAutomatiquement(docId: UUID): EnrichissementResult
+  + comparerIAvsExpert(docId: UUID): Comparaison
+  + regenererAvecApprentissage(docId: UUID): void
+  + ouvrirInterfaceVisuelle(docId: UUID): Canvas
+  + testerSystemeQA(docId: UUID): void
+  + consulterHistorique(docId: UUID): List<Historique>
+  + editerJSONEnrichi(docId: UUID, json: JSON): void
+  + exporterDonnees(docId: UUID, format: String): File
+}
+
+class Administrateur {
+  - privileges: List<String>
+  --
+  + gererUtilisateurs(): List<Utilisateur>
+  + configurerIA(config: ConfigurationIA): void
+  + monitorerPerformances(): StatistiquesPerformance
+  + ajouterUtilisateur(user: Utilisateur): void
+  + supprimerUtilisateur(userId: UUID): void
+}
+
+Utilisateur <|-- Metadonneur
+Metadonneur <|-- ExpertPharmaceutique
+Utilisateur <|-- Administrateur
+
+' ===========================
+' GESTION DOCUMENTS
+' ===========================
+
+package "📄 Gestion Documents" BUSINESS_COLOR {
+
+  class Document {
+    - id: UUID
+    - titre: String
+    - fichierPDF: byte[]
+    - cheminFichier: String
+    - dateTelechargement: DateTime
+    - taille: long
+    - nombrePages: int
+    - metadonnees: Metadonnees
+    - statut: StatutDocument
+    --
+    + charger(): boolean
+    + sauvegarder(): boolean
+    + extrairePage(numero: int): Page
+    + obtenirTexteComplet(): String
+    + ajouterMetadonnees(meta: Metadonnees): void
+  }
+
+  class Page {
+    - numero: int
+    - contenuTexte: String
+    - image: byte[]
+    - annotations: List<Annotation>
+    --
+    + extraireTexte(): String
+    + obtenirAnnotations(): List<Annotation>
+    + ajouterAnnotation(annotation: Annotation): void
+  }
+
+  class Metadonnees {
+    - auteur: String
+    - datePublication: DateTime
+    - version: String
+    - langue: String
+    - type: TypeDocument
+    - proprietes: Map<String, Object>
+    --
+    + ajouter(cle: String, valeur: Object): void
+    + obtenir(cle: String): Object
+    + toJSON(): String
+  }
+
+  enum StatutDocument {
+    NOUVEAU
+    EN_COURS_TRAITEMENT
+    ANNOTE
+    ENRICHI
+    VALIDE
+    ARCHIVE
+  }
+
+  enum TypeDocument {
+    NOTICE_MEDICAMENT
+    RAPPORT_ESSAI_CLINIQUE
+    MONOGRAPHIE
+    RCP
+    AUTRE
+  }
+
+  class TexteSelection {
+    - texte: String
+    - pageNumero: int
+    - positionDebut: int
+    - positionFin: int
+    - coordonnees: Rectangle
+    --
+    + obtenirContexte(): String
+    + marquer(): void
+  }
+
+  Document "1" *-- "0..*" Page
+  Document "1" *-- "1" Metadonnees
+  Page "1" *-- "0..*" TexteSelection
+}
+
+' ===========================
+' EXTRACTION & ANNOTATION
+' ===========================
+
+package "🔍 Extraction & Annotation" SYSTEM_COLOR {
+
+  class ServiceExtraction {
+    - extracteurTexte: ExtracteurTexte
+    - detecteurEntites: DetecteurEntites
+    --
+    + extraireAnnotations(doc: Document): List<Annotation>
+    + traiterDocument(doc: Document): ResultatExtraction
+  }
+
+  class Annotation {
+    - id: UUID
+    - type: TypeAnnotation
+    - texte: String
+    - page: int
+    - position: Rectangle
+    - confiance: double
+    - dateCreation: DateTime
+    - creePar: String
+    --
+    + valider(): void
+    + modifier(texte: String): void
+    + supprimer(): void
+  }
+
+  enum TypeAnnotation {
+    ENTITE
+    DOSAGE
+    INDICATION
+    EFFET_SECONDAIRE
+    CONTRE_INDICATION
+    INTERACTION
+    AUTRE
+  }
+
+  class Entite {
+    - nom: String
+    - categorie: CategorieEntite
+    - synonymes: List<String>
+    - mentions: List<Mention>
+    --
+    + ajouterSynonyme(synonyme: String): void
+    + obtenirMentions(): List<Mention>
+  }
+
+  enum CategorieEntite {
+    MEDICAMENT
+    PRINCIPE_ACTIF
+    DOSAGE
+    VOIE_ADMINISTRATION
+    INDICATION
+    PATHOLOGIE
+    SYMPTOME
+    ORGANE
+    POPULATION
+  }
+
+  class Dosage {
+    - valeur: double
+    - unite: String
+    - frequence: String
+    - duree: String
+    - contexte: String
+    --
+    + normaliser(): String
+    + valider(): boolean
+  }
+
+  class Indication {
+    - nom: String
+    - pathologie: String
+    - population: String
+    - conditions: List<String>
+    --
+    + decrire(): String
+  }
+
+  class Mention {
+    - texte: String
+    - position: Rectangle
+    - pageNumero: int
+    - contexte: String
+    --
+    + obtenirExtrait(): String
+  }
+
+  class GenerateurJSON {
+    --
+    + genererJSON(annotations: List<Annotation>): String
+    + exporterEntites(entites: List<Entite>): String
+    + sauvegarderResultat(chemin: String, json: String): boolean
+  }
+
+  ServiceExtraction --> Annotation
+  Annotation <|-- Entite
+  Annotation <|-- Dosage
+  Annotation <|-- Indication
+  Entite "1" *-- "0..*" Mention
+}
+
+' ===========================
+' SYSTÈME IA
+' ===========================
+
+package "🤖 Intelligence Artificielle" AI_COLOR {
+
+  class SystemeIA {
+    - modeleNLP: ModeleNLP
+    - configuration: ConfigurationIA
+    --
+    + initialiser(): void
+    + traiterDocument(doc: Document): void
+    + apprendreDeCorrections(corrections: List<Correction>): void
+  }
+
+  class ModeleNLP {
+    - nomModele: String
+    - version: String
+    - parametres: Map<String, Object>
+    --
+    + chargerModele(): void
+    + predire(texte: String): List<Prediction>
+    + affiner(donnees: Dataset): void
+  }
+
+  class ConfigurationIA {
+    - temperature: double
+    - maxTokens: int
+    - modele: String
+    - seuilConfiance: double
+    - parametresAvances: Map<String, Object>
+    --
+    + valider(): boolean
+    + appliquer(): void
+  }
+
+  class DetecteurEntites {
+    - modele: ModeleNLP
+    --
+    + detecter(texte: String): List<Entite>
+    + extraireEntites(page: Page): List<Entite>
+  }
+
+  class AnalyseurTexte {
+    --
+    + analyserParagraphe(texte: String): AnalyseResult
+    + extraireRelations(texte: String): List<Relation>
+    + identifierMotsCles(texte: String): List<String>
+  }
+
+  SystemeIA "1" *-- "1" ModeleNLP
+  SystemeIA "1" *-- "1" ConfigurationIA
+  SystemeIA --> DetecteurEntites
+  SystemeIA --> AnalyseurTexte
+}
+
+' ===========================
+' ENRICHISSEMENT
+' ===========================
+
+package "🧠 Enrichissement Intelligent" EXPERT_COLOR {
+
+  class ServiceEnrichissement {
+    - generateur: GenerateurEnrichissement
+    - validateur: Validateur
+    --
+    + enrichirAutomatiquement(doc: Document): DocumentEnrichi
+    + appliquerModele(doc: Document): EnrichissementResult
+  }
+
+  class DocumentEnrichi {
+    - documentOriginal: Document
+    - relations: List<Relation>
+    - questionsReponses: List<QA>
+    - resume: Resume
+    - dateEnrichissement: DateTime
+    - score: double
+    --
+    + obtenirJSON(): String
+    + sauvegarder(): boolean
+    + comparer(autre: DocumentEnrichi): Comparaison
+  }
+
+  class Relation {
+    - id: UUID
+    - entiteSource: Entite
+    - entiteCible: Entite
+    - typeRelation: TypeRelation
+    - description: String
+    - confiance: double
+    - source: SourceRelation
+    --
+    + valider(): boolean
+    + inverser(): Relation
+  }
+
+  enum TypeRelation {
+    TRAITE
+    CAUSE
+    PREVIENT
+    INTERAGIT_AVEC
+    CONTIENT
+    ADMINISTRE_PAR
+    DOSE_POUR
+    CONTRE_INDIQUE_POUR
+    EFFET_SECONDAIRE_DE
+  }
+
+  enum SourceRelation {
+    IA_AUTOMATIQUE
+    EXPERT_MANUEL
+    APPRENTISSAGE
+    MIXTE
+  }
+
+  class Resume {
+    - texteComplet: String
+    - pointsCles: List<String>
+    - sections: Map<String, String>
+    - longueur: int
+    --
+    + generer(doc: Document): void
+    + ajusterLongueur(maxMots: int): String
+  }
+
+  class Comparaison {
+    - versionIA: DocumentEnrichi
+    - versionExpert: DocumentEnrichi
+    - differences: List<Difference>
+    - scoreCorrelation: double
+    - dateComparaison: DateTime
+    --
+    + calculerDifferences(): List<Difference>
+    + genererRapport(): String
+  }
+
+  class Difference {
+    - type: TypeDifference
+    - element: String
+    - valeurIA: String
+    - valeurExpert: String
+    - impact: String
+    --
+    + decrire(): String
+  }
+
+  enum TypeDifference {
+    RELATION_MANQUANTE
+    RELATION_SUPPLEMENTAIRE
+    RELATION_MODIFIEE
+    ENTITE_MANQUANTE
+    DOSAGE_DIFFERENT
+    QA_INCORRECTE
+  }
+
+  DocumentEnrichi "1" *-- "0..*" Relation
+  DocumentEnrichi "1" *-- "0..*" QA
+  DocumentEnrichi "1" *-- "0..1" Resume
+  Comparaison "1" *-- "2" DocumentEnrichi
+  Comparaison "1" *-- "0..*" Difference
+}
+
+' ===========================
+' CRÉATEUR VISUEL
+' ===========================
+
+package "🎨 Créateur Visuel Relations" EXPERT_COLOR {
+
+  class Canvas {
+    - id: UUID
+    - documentId: UUID
+    - elements: List<ElementVisuel>
+    - largeur: int
+    - hauteur: int
+    - zoom: double
+    --
+    + ajouterElement(element: ElementVisuel): void
+    + supprimerElement(id: UUID): void
+    + reorganiser(): void
+    + autoOrganiser(): void
+    + sauvegarder(): boolean
+    + exporter(format: String): File
+  }
+
+  abstract class ElementVisuel {
+    - id: UUID
+    - positionX: double
+    - positionY: double
+    - couleur: String
+    - selectionne: boolean
+    --
+    + deplacer(x: double, y: double): void
+    + selectionner(): void
+    + deselectionner(): void
+    + dessiner(): void
+  }
+
+  class NoeudEntite {
+    - entite: Entite
+    - forme: FormeNoeud
+    - taille: int
+    --
+    + modifier(entite: Entite): void
+    + redimensionner(taille: int): void
+  }
+
+  enum FormeNoeud {
+    CERCLE
+    RECTANGLE
+    LOSANGE
+    HEXAGONE
+  }
+
+  class LienRelation {
+    - relation: Relation
+    - noeudSource: NoeudEntite
+    - noeudCible: NoeudEntite
+    - styleTrace: StyleLigne
+    - epaisseur: int
+    --
+    + mettreAJour(): void
+    + changerStyle(style: StyleLigne): void
+  }
+
+  enum StyleLigne {
+    PLEINE
+    POINTILLEE
+    TIRETS
+    FLECHE
+    DOUBLE_FLECHE
+  }
+
+  class GestionnaireCanvas {
+    --
+    + creerCanvas(docId: UUID): Canvas
+    + chargerCanvas(id: UUID): Canvas
+    + sauvegarderCanvas(canvas: Canvas): boolean
+    + autoOrganiser(canvas: Canvas): void
+  }
+
+  Canvas "1" *-- "0..*" ElementVisuel
+  ElementVisuel <|-- NoeudEntite
+  ElementVisuel <|-- LienRelation
+  LienRelation "0..*" --> "1" Relation
+  LienRelation "1" --> "1" NoeudEntite : source
+  LienRelation "1" --> "1" NoeudEntite : cible
+  NoeudEntite "1" --> "1" Entite
+}
+
+' ===========================
+' SYSTÈME Q&A
+' ===========================
+
+package "❓ Système Questions & Réponses" EXPERT_COLOR {
+
+  class SystemeQA {
+    - questionsReponses: List<QA>
+    - evaluateur: EvaluateurReponse
+    --
+    + poserQuestion(question: String, contexte: Document): Reponse
+    + evaluerReponse(qa: QA): Evaluation
+    + ajouterQA(qa: QA): void
+    + testerSysteme(questions: List<String>): List<ResultatTest>
+  }
+
+  class QA {
+    - id: UUID
+    - question: String
+    - reponse: String
+    - contexte: String
+    - source: SourceQA
+    - confiance: double
+    - dateCreation: DateTime
+    - valide: boolean
+    --
+    + valider(): void
+    + corriger(nouvelleReponse: String): void
+    + obtenirJSON(): String
+  }
+
+  enum SourceQA {
+    GENEREE_IA
+    AJOUTEE_EXPERT
+    CORRIGEE_EXPERT
+    APPRENTISSAGE
+  }
+
+  class Reponse {
+    - texte: String
+    - confiance: double
+    - sources: List<String>
+    - contextes: List<String>
+    --
+    + formater(): String
+    + ajouterSource(source: String): void
+  }
+
+  class EvaluateurReponse {
+    --
+    + evaluer(reponse: Reponse, reponseAttendue: String): Evaluation
+    + calculerScore(qa: QA): double
+  }
+
+  class Evaluation {
+    - score: double
+    - precision: double
+    - pertinence: double
+    - completude: double
+    - commentaires: String
+    --
+    + estValide(): boolean
+    + genererRapport(): String
+  }
+
+  class Correction {
+    - qaOriginal: QA
+    - reponseCorrigee: String
+    - motifCorrection: String
+    - expertId: UUID
+    - dateCorrection: DateTime
+    --
+    + appliquer(): void
+    + enregistrer(): void
+  }
+
+  SystemeQA "1" *-- "0..*" QA
+  SystemeQA "1" *-- "1" EvaluateurReponse
+  QA "1" --> "1" Reponse
+  EvaluateurReponse --> Evaluation
+  Correction "1" --> "1" QA
+}
+
+' ===========================
+' APPRENTISSAGE
+' ===========================
+
+package "📊 Apprentissage & Historique" EXPERT_COLOR {
+
+  class SystemeApprentissage {
+    - historique: List<Historique>
+    - patterns: List<Pattern>
+    --
+    + enregistrerAction(action: Action): void
+    + analyserAmeliorations(): AnalyseAmelioration
+    + extrairePatterns(): List<Pattern>
+    + appliquerApprentissage(): void
+  }
+
+  class Historique {
+    - id: UUID
+    - documentId: UUID
+    - actionType: TypeAction
+    - utilisateurId: UUID
+    - timestamp: DateTime
+    - avant: String
+    - apres: String
+    - description: String
+    --
+    + obtenirDetails(): Map<String, Object>
+    + comparer(): Difference
+  }
+
+  enum TypeAction {
+    ENRICHISSEMENT_AUTO
+    CORRECTION_EXPERT
+    AJOUT_RELATION
+    MODIFICATION_ENTITE
+    CORRECTION_QA
+    REGENERATION
+  }
+
+  class Pattern {
+    - id: UUID
+    - nom: String
+    - description: String
+    - conditions: List<String>
+    - actions: List<String>
+    - frequence: int
+    - fiabilite: double
+    --
+    + appliquer(doc: Document): boolean
+    + valider(): boolean
+  }
+
+  class Statistiques {
+    - nombreDocuments: int
+    - tauxPrecision: double
+    - tempsTraitement: long
+    - ameliorations: Map<String, double>
+    - donnees: Map<String, Object>
+    --
+    + calculer(): void
+    + exporter(): String
+    + visualiser(): GraphiqueStats
+  }
+
+  class AnalyseAmelioration {
+    - periodDebut: DateTime
+    - periodeFin: DateTime
+    - metriques: Map<String, double>
+    - tendances: List<Tendance>
+    --
+    + genererRapport(): String
+    + obtenirRecommandations(): List<String>
+  }
+
+  SystemeApprentissage "1" *-- "0..*" Historique
+  SystemeApprentissage "1" *-- "0..*" Pattern
+  SystemeApprentissage --> Statistiques
+  SystemeApprentissage --> AnalyseAmelioration
+}
+
+' ===========================
+' GESTION DONNÉES
+' ===========================
+
+package "💾 Gestion & Export Données" EXPERT_COLOR {
+
+  class GestionnaireDonnees {
+    - repository: Repository
+    --
+    + sauvegarder(entite: Object): boolean
+    + charger(id: UUID, type: Class): Object
+    + supprimer(id: UUID): boolean
+    + exporter(id: UUID, format: FormatExport): File
+  }
+
+  class EditeurJSON {
+    - schema: JSONSchema
+    - validateur: JSONValidator
+    --
+    + editer(json: String): String
+    + valider(json: String): boolean
+    + formater(json: String): String
+    + fusionner(json1: String, json2: String): String
+  }
+
+  enum FormatExport {
+    JSON
+    XML
+    CSV
+    PDF
+    EXCEL
+  }
+
+  class Exportateur {
+    --
+    + exporterDocument(doc: Document, format: FormatExport): File
+    + exporterRelations(relations: List<Relation>, format: FormatExport): File
+    + exporterQA(qas: List<QA>, format: FormatExport): File
+    + exporterStatistiques(stats: Statistiques, format: FormatExport): File
+  }
+
+  interface Repository {
+    + save(entite: Object): boolean
+    + findById(id: UUID): Object
+    + findAll(): List<Object>
+    + delete(id: UUID): boolean
+    + update(entite: Object): boolean
+  }
+
+  class DocumentRepository {
+    --
+    + findByStatus(status: StatutDocument): List<Document>
+    + findByDate(debut: DateTime, fin: DateTime): List<Document>
+  }
+
+  class EnrichissementRepository {
+    --
+    + findByDocument(docId: UUID): List<DocumentEnrichi>
+    + findByExpert(expertId: UUID): List<DocumentEnrichi>
+  }
+
+  Repository <|.. DocumentRepository
+  Repository <|.. EnrichissementRepository
+  GestionnaireDonnees "1" --> "1" Repository
+  GestionnaireDonnees --> Exportateur
+  GestionnaireDonnees --> EditeurJSON
+}
+
+' ===========================
+' RELATIONS PRINCIPALES
+' ===========================
+
+Metadonneur --> Document : gère
+ExpertPharmaceutique --> DocumentEnrichi : crée/édite
+ExpertPharmaceutique --> Canvas : utilise
+ExpertPharmaceutique --> SystemeQA : teste/corrige
+ExpertPharmaceutique --> SystemeApprentissage : consulte
+Administrateur --> SystemeIA : configure
+Administrateur --> ConfigurationIA : modifie
+
+Document --> ServiceExtraction : traité par
+ServiceExtraction --> SystemeIA : utilise
+ServiceEnrichissement --> SystemeIA : utilise
+ServiceEnrichissement --> DocumentEnrichi : produit
+
+DocumentEnrichi --> Document : enrichit
+SystemeApprentissage --> Correction : apprend de
+SystemeQA --> AnalyseurTexte : utilise
+
+GestionnaireDonnees --> Document : persiste
+GestionnaireDonnees --> DocumentEnrichi : persiste
+GestionnaireDonnees --> Canvas : persiste
+
+' ===========================
+' NOTES
+' ===========================
+
+note top of SystemeIA : Utilise des modèles LLM\npour l'analyse automatique\net l'extraction d'informations
+
+note top of Canvas : Interface visuelle interactive\npour créer et gérer\nles relations entre entités
+
+note top of SystemeApprentissage : Apprend des corrections\nexpertes pour améliorer\nles prédictions futures
+
+note top of DocumentEnrichi : Contient toutes les informations\nextraites et enrichies:\nentités, relations, Q&A, résumé
+
+@enduml

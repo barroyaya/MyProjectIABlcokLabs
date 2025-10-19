@@ -1,4 +1,4 @@
-# rawdocs/regulatory_analyzer.py - NOUVEAU FICHIER
+﻿# rawdocs/regulatory_analyzer.py - NOUVEAU FICHIER
 """
 Analyseur réglementaire intelligent avec GROQ pour extraire et résumer
 les informations réglementaires importantes de chaque page
@@ -26,7 +26,7 @@ class RegulatoryAnalyzer:
         if not self.api_key:
             raise ValueError("GROQ_API_KEY environment variable not set")
 
-        print("🔍 Analyseur réglementaire GROQ initialisé")
+        print("[INFO] Analyseur reglementaire GROQ initialise")
 
     def analyze_page_regulatory_content(self, page_text: str, page_num: int, document_context: str = "") -> Dict[
         str, Any]:

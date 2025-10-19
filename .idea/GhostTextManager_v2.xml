@@ -51,6 +51,18 @@
             </GhostTextMetaData>
           </value>
         </entry>
+        <entry key="Dans la partie :&quot;Analyser Documents Validés&quot;  on aimerait modifier l'interface apres analyse pour qu'on puise voir la page du document pdf en question side by side avec les relations:">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760376799390" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
         <entry key="En fait dans l'affciahe du template je veux afficher tous les entités d annotations predefinies deja">
           <value>
             <GhostTextMetaData>
@@ -125,6 +137,18 @@
             </GhostTextMetaData>
           </value>
         </entry>
+        <entry key="LLMClient initialized providers=['groq'] model_any=None model_groq=llama-3.3-70b-versatile model_openai=gpt-4o-mini enabled=True&#10;[14/Oct/2025 00:19:19] &quot;POST /expert/document/282/analyze-pages-relations/ HTTP/1.1&quot; 200 1371&#10;Fichier PDF introuvable: C:\Users\yayab\PycharmProjects\pc\pc6\MyProjectIABlcokLabs\media\20250922_135536\Final-In-Vivo-Bioavailability-Bioequivalence-Studies--Analytical.pdf&#10;Not Found: /expert/page-image/282/1/&#10;Not Found: /expert/page-image/282/1/&#10;[14/Oc">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760397601766" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
         <entry key="Normalement quand on cree une annotation d un document et qu on annote avec l entité Product ca doit se creer dans la partie Product du Client alorq ue la ca marche pas encore">
           <value>
             <GhostTextMetaData>
@@ -149,6 +173,18 @@
             </GhostTextMetaData>
           </value>
         </entry>
+        <entry key="On veut evaluer le modele dans la partie expert pour mettre les resulats dans mon memoire">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760744457544" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
         <entry key="Voila maintenant dans la partie annotation le dashbord je veux diminuer le nombre d entités dnans la base parce qu il y en a trop vous pouvez garder les plus pertiennts comme Product Site Adresse Substance Active Variation Type Variation Code Code etc sinon les autres il y en a pleins faut les enlever si on en a besoin on les rajoute manuelleme,t">
           <value>
             <GhostTextMetaData>
@@ -156,6 +192,142 @@
               <option name="timestamps">
                 <list>
                   <option value="1758052990911" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="aides moi à créer une interface side-by-side avec le PDF original et le JSON pour le créateur de relations visuelles">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759835921724" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="ajoute maintenant le json et  une liste deroulante des entités afin des les selectionner les annotations d'une maniere fluide tout ça dan le createur visuel">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759840848427" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="bonjour change uniquement le background du dashboard expert en blanc fluide {# templates/expert/dashboard.html #}">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760732293996" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="c'est bien ce que tu as fais mais on a cette petite erreur en capture et aussi ajoute de telle sorte qu'on puisse modifier et mettre à jour les ancienne relations dejà analysé par page ou ajouter">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760201113617" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="c'est bien mais on a cette erreur:">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760396485665" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="c'est bien mais on a toujours une boucle qui genere verticalement les graphiques sans fin">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760746285728" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="c'est toujours pareil on arrive pas à voir ou descendre vers le bas car on les graphiques ne termine jamais">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760745883447" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="certains chemins documents n'arrivent n'arrive pas à etre recuperé pour afficher:[07/Oct/2025 16:21:09] &quot;POST /expert/document/281/enrich-json/ HTTP/1.1&quot; 200 125&#10;[07/Oct/2025 16:21:10] &quot;GET /expert/semantic-json/281/ HTTP/1.1&quot; 200 151288&#10;Document trouvé: 281&#10;Chemin du fichier: C:\Users\yayab\PycharmProjects\pc\pc6\MyProjectIABlcokLabs\media\20250921_170539\20250921_170539\E9_Guideline.pdf&#10;Fichier introuvable à: C:\Users\yayab\PycharmProjects\pc\pc6\MyProjectIABlcokLabs\media\20250921_170539\20250921_170539\E9_Guideline.pdf&#10;Erreur lors du chargement du PDF 281: Fichier PDF introuvable à: C:\Users\yayab\PycharmProjects\pc\pc6\MyProjectIABlcokLabs\media\20250921_170539\20250921_170539\E9_Guideline.pdf&#10;LLMClient initialized providers=['groq'] model_any=None model_groq=llama-3.3-70b-versatile model_openai=gpt-4o-mini enabled=True&#10;[07/Oct/2025 16:21:10] &quot;GET /expert/document/281/learning-history/ HTTP/1.1&quot; 200 92&#10;Not Found: /expert/proxy-pdf/281/">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759850594009" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="continu">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="2.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759660759950" />
+                  <option value="1759657016690" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="continue">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759836889089" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="continues">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="4.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760399012616" />
+                  <option value="1760397375384" />
+                  <option value="1760395519548" />
+                  <option value="1760201537558" />
                 </list>
               </option>
             </GhostTextMetaData>
@@ -173,13 +345,654 @@
             </GhostTextMetaData>
           </value>
         </entry>
-        <entry key="hello">
+        <entry key="corrige l'interface html d'evaluation car les graphiques genere une boucle infini:">
           <value>
             <GhostTextMetaData>
               <option name="count" value="1.0" />
               <option name="timestamps">
                 <list>
+                  <option value="1760745547276" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="corrige on a cette erreur:">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760807245748" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="corrige ça :">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759846188061" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="corriges ces erreurs  en capture">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760401157602" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="corriges rapidement cette erreur :">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760396880596" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="corriges sans modifer le html de view_expert_deltas.html">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760743406034" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="dans la partie &quot;Createur Visuel de relation&quot;  dans l'interface  Créateur Visuel de Relations, lorsque qu'on veut ajouter une nouvelle valeur en une entité par defaut ce sont  les entités du document qui doivent etre s'afficher pour choix et aussi cela doit etre ajouté dans le json quand une nouvelle valeur ou entité est ajouté. je json dans cette interface doit etre modifiable comme le json basique et aussi en blanc pas en noir et augmente legerement l'affichage du json">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760813561236" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="dans la partie expert dans l'interface  JSON Sémantique de l'expert  on aimerait  modifier  la section 'Depeuis un paragraphe&quot;  affichant les document validié par le metadonneur afin que l'expert a trouver les relation page par page de chaque document , voici l'interface en capture qu'on veut modifier">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760190326461" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="dans la partie expert depuis JSON Sémantique Expert dans la partie dans la section 'Depeuis un paragraphe&quot;  on voulait recuperer les documents validé depuis metadonneur et trouver les relation possible page par page">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760188574456" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="dans la partie expert le boutton sauvegarder le resumé ne fonctinne pas corrige">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759656568748" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="dans le dashboard expert quand l'utilisateur cique sur Annoter il doit se rediriger vers l'interface annotateur  qui est http://127.0.0.1:8000/annotation/document/284/">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760807053321" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="donne la ligne qui permet d'augmenter horizontalement la cellule du json">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760833652686" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="donne la ligne qui permet d'augmenter verticalement la cellule du json">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760833682101" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="donne moi simplement la ligne qui permet d'augmenter la hauteur dans le code">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760833324639" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="fais le BacklogProduit du systeme">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759925428967" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="fais le diagramme de cas d'utilisation  de ce systeme">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759865628802" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="fais le diagramme de classe de ce systeme :plantuml">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759913792373" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="fais le diagramme de classe pour Extraction et Annotation ensembe">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="5.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760006965090" />
+                  <option value="1760006918782" />
+                  <option value="1760006873009" />
+                  <option value="1760006811527" />
+                  <option value="1760006381754" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="fais le diagramme de sequence de ce systeme">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759917467961" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="hello">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="2.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760185879150" />
                   <option value="1758260414765" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="j'ai cette erreur quand je clique sur interface annotateur et aussi json semantique">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759829422463" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="l'analyse doit se fait par page, l'utilisateur peut choisir un ou plusieurs pages pour trouver des relations">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760400727353" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="la difficulté que nous rencontrons se trouve au niveau de la section &quot;Analyser Documents Validés&quot;  le modele de detection de relation selon la ou les page choisi ne fonctionne pas correctement, alors ameliore tout cette partie de manierce complete et propre">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760402925016" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="la partie historique  detaillé de l'expert ne marche pas">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760742373766" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="le json doit s'afficher avec des couleur comme ça :">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760814268454" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="le probleme c'est pas nltk, c'est la page ne s'affichent pas dans l'interface :voila en capture: avant ça passait[14/Oct/2025 00:22:47] &quot;POST /expert/document/281/analyze-pages-relations/ HTTP/1.1&quot; 200 2233&#10;Fichier PDF introuvable: C:\Users\yayab\PycharmProjects\pc\pc6\MyProjectIABlcokLabs\media\20250921_170539\20250921_170539\E9_Guideline.pdf&#10;Not Found: /expert/page-image/281/1/&#10;Not Found: /expert/page-image/281/1/&#10;[14/Oct/2025 00:22:47] &quot;GET /expert/page-image/281/1/ HTTP/1.1&quot; 404 27457">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760397941618" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="le resumé synchronisé prend assez de temps">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759658107903" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="les documents pdf sont celles que le metadonneur a validé normalement ça doit exister">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760399373727" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="les entités dans view_document_annotation_json_enriched.html qui sont definit manuellement devrait etre dynamique avec les entités du document :&lt;!-- Contenu: Entités --&gt;&#10;            &lt;div class=&quot;palette-content&quot; id=&quot;palette-entities-content&quot;&gt;&#10;              &lt;h4&gt;&lt;i class=&quot;fas fa-cubes&quot;&gt;&lt;/i&gt; Entités disponibles&lt;/h4&gt;&#10;              &lt;input type=&quot;text&quot; class=&quot;entity-search&quot; id=&quot;entity-search&quot; placeholder=&quot;Rechercher une entité...&quot;&gt;&#10;              &lt;div class=&quot;create-entity-form&quot;&gt;&#10;                &lt;input type=&quot;text&quot; class=&quot;create-entity-input&quot; id=&quot;new-entity-name&quot; placeholder=&quot;Nom de la nouvelle entité&quot;&gt;&#10;                &lt;select class=&quot;create-entity-input&quot; id=&quot;new-entity-type&quot;&gt;&#10;                  &lt;option value=&quot;product&quot;&gt;Produit&lt;/option&gt;&#10;                  &lt;option value=&quot;ingredient&quot;&gt;Ingrédient&lt;/option&gt;&#10;                  &lt;option value=&quot;dosage&quot;&gt;Dosage&lt;/option&gt;&#10;                  &lt;option value=&quot;indication&quot;&gt;Indication&lt;/option&gt;&#10;                  &lt;option value=&quot;contraindication&quot;&gt;Contre-indication&lt;/option&gt;&#10;                  &lt;option value=&quot;custom&quot;&gt;Personnalisé&lt;/option&gt;&#10;                &lt;/select&gt;&#10;                &lt;button class=&quot;create-entity-btn&quot; onclick=&quot;createNewCanvasEntity()&quot;&gt;&lt;i class=&quot;fas fa-plus&quot;&gt;&lt;/i&gt; Créer&lt;/button&gt;&#10;              &lt;/div&gt;&#10;              &lt;div id=&quot;pdf-selected-text-preview&quot; style=&quot;display:none;padding:0.75rem;background:rgba(16,185,129,.1);border:1px dashed var(--pharma-accent);border-radius:8px;margin-bottom:1rem;&quot;&gt;&#10;                &lt;div style=&quot;font-size:0.85rem;font-weight:600;margin-bottom:0.5rem;color:var(--pharma-accent);&quot;&gt;&#10;                  &lt;i class=&quot;fas fa-file-pdf&quot;&gt;&lt;/i&gt; Texte sélectionné dans le PDF:&#10;                &lt;/div&gt;&#10;                &lt;div id=&quot;pdf-selected-text-content&quot; style=&quot;font-size:0.85rem;max-height:100px;overflow-y:auto;padding:0.5rem;background:#fff;border-radius:4px;&quot;&gt;&lt;/div&gt;&#10;                &lt;button class=&quot;create-entity-btn&quot; onclick=&quot;createEntityFromPDFSelection()&quot; style=&quot;margin-top:0.5rem;&quot;&gt;&#10;                  &lt;i class=&quot;fas fa-plus-circle&quot;&gt;&lt;/i&gt; Créer entité depuis sélection&#10;                &lt;/button&gt;&#10;              &lt;/div&gt;&#10;              &lt;div class=&quot;entity-list&quot; id=&quot;entity-list&quot;&gt;&lt;/div&gt;&#10;            &lt;/div&gt;">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760815831441" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="maintenant dans la partie &quot;Analyser Documents Validés&quot; dnas l'interface Analyser les Relations dans les Documents Validés quand on modifie une relation on a pas de boutton pour enregistrer la modification :">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760808791790" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="non garge l'ancienne interface historique detaillé">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760743129592" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="non mais la valeur initial de la hauteur c'est la largeur qu'on veut augmenter">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760831829864" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="non vue que c'est l'expert alors il doit se connecter automatiquement sans demander de se connecter">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760807760765" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="on a  cette erreur [18/Oct/2025 18:10:00] &quot;GET /annotation/document/284/ HTTP/1.1&quot; 302 0&#10;Not Found: /rawdocs/&#10;Not Found: /rawdocs/&#10;[18/Oct/2025 18:10:00] &quot;GET /rawdocs/?next=/annotation/document/284/ HTTP/1.1&quot; 404 14692  et voici des url dans rawdocs:">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760807515032" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="on a cette  erreur: File &quot;&lt;frozen importlib._bootstrap&gt;&quot;, line 1050, in _gcd_import&#10;  File &quot;&lt;frozen importlib._bootstrap&gt;&quot;, line 1027, in _find_and_load&#10;  File &quot;&lt;frozen importlib._bootstrap&gt;&quot;, line 1006, in _find_and_load_unlocked&#10;  File &quot;&lt;frozen importlib._bootstrap&gt;&quot;, line 688, in _load_unlocked&#10;  File &quot;&lt;frozen importlib._bootstrap_external&gt;&quot;, line 883, in exec_module&#10;  File &quot;&lt;frozen importlib._bootstrap&gt;&quot;, line 241, in _call_with_frames_removed&#10;  File &quot;C:\Users\yayab\PycharmProjects\pc\pc6\MyProjectIABlcokLabs\expert\urls.py&quot;, line 3, in &lt;module&gt;&#10;    from . import views, views_enrichment, views_learning&#10;  File &quot;C:\Users\yayab\PycharmProjects\pc\pc6\MyProjectIABlcokLabs\expert\views.py&quot;, line 3952&#10;    REGENERATION_CACHE.pop(page.document.id, None); trigger_summary_regeneration_safe(page.document, request.user, 0)  # Immediate for manual expert action&#10;IndentationError: unexpected indent">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759661295917" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="on a cette erreur">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760745248982" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="on a cette erreur:">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759667486500" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="on acette erreur">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759829342637" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="on aimerait agrandir horizontalement  la partie json dans le createur visuel car c'est tres petit:">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760831423626" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="on aimerait agrandir la cellule  la partie json dans le createur visuel car c'est tres petit:">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760831467363" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="on aimerait reduit la section du pdf et augmenter la partie grapghique et centré, cette partie doit occupé la grande place">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759854000519" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="on ne voit pas la page :">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760377481189" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="on ne voit pas le document:">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759837164507" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="organise de maniere optimal et ameliore de maniere professionnel l'interface de createur visuel de telle sorte que ça soit facile à manupuler, diminues la la taille pour quon  et mets en plein ecran pour qu'on puisse voir tout le visuel">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759843414794" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="pour les pages deja analysés quand on clique dessus on doit voir toute ses relations">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760203148937" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="probleme d'encodage:ðŸ”„ RÃ©gÃ©nÃ©ration automatique programmÃ©e dans 3s pour doc 284&#10;[05/Oct/2025 11:19:50] &quot;POST /expert/api/delete-annotation/2887/ HTTP/1.1&quot; 200 639&#10;[05/Oct/2025 11:19:50] &quot;GET /expert/api/get-annotations/1561/ HTTP/1.1&quot; 200 3459&#10;â° RÃ©gÃ©nÃ©ration rÃ©sumÃ© ignorÃ©e (trop rÃ©cente) pour doc 284&#10;[05/Oct/2025 11:19:53] &quot;GET /expert/api/get-annotations/1561/ HTTP/1.1&quot; 200 3459&#10; Analyseur réglementaire GROQ initialisé&#10;ðŸ”„ RÃ©gÃ©nÃ©ration automatique programmÃ©e dans 3s pour doc 284&#10;[05/Oct/2025 11:20:03] &quot;POST /expert/api/save-annotation/ HTTP/1.1&quot; 200 759&#10;[05/Oct/2025 11:20:03] &quot;GET /expert/api/get-annotations/1561/ HTTP/1.1&quot; 200 3769&#10;â° RÃ©gÃ©nÃ©ration rÃ©sumÃ© ignorÃ©e (trop rÃ©cente) pour doc 284&#10;[05/Oct/2025 11:20:08] &quot;GET /expert/annotation/document/284/?page=1 HTTP/1.1&quot; 200 35778&#10;[05/Oct/2025 11:20:08] &quot;GET /expert/api/get-annotations/1561/ HTTP/1.1&quot; 200 3769&#10;[05/Oct/2025 11:20:12] &quot;GET /expert/review/284/?page=1 HTTP/1.1&quot; 200 52374&#10;[05/Oct/2025 11:20:43] &quot;GET /expert/api/get-annotations/1561/ HTTP/1.1&quot; 200 3769">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759659692405" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="quand on clique sur laisser  l'IA on doit voir la description de l'IA avec de valider  et aussi l'auto-organisation ne marche pas bien optimise et on a toujours cette erreur:Not Found: /expert/annotation/document/284/describe-relation/&#10;[07/Oct/2025 15:31:16] &quot;POST /expert/annotation/document/284/describe-relation/ HTTP/1.1&quot; 404 26402">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759847664330" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="quand on l'expert supprime ou ajoute une annotation dans la partie Annotater manuellement cela n'est pas pris en compte dans le resumé donc corrige ça">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759660548709" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="rien n'a été changé">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760395625472" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="toujours meme erreur, le document est en anglais mais le resumé est en francais:">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759668564309" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="voici">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759668048527" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="voici la page pdf ne s'affiche pas c'est seumement les relations  dans la section &quot;Analyser Documents Validés&quot; ne te trompe pas de fichier html en travail avec view_document_annotation_json_enriched.html">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1760398774174" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="voici les erreurs:">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759838414250" />
+                </list>
+              </option>
+            </GhostTextMetaData>
+          </value>
+        </entry>
+        <entry key="voila les erreurs:*">
+          <value>
+            <GhostTextMetaData>
+              <option name="count" value="1.0" />
+              <option name="timestamps">
+                <list>
+                  <option value="1759839188822" />
                 </list>
               </option>
             </GhostTextMetaData>

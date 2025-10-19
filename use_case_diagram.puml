@@ -1,0 +1,168 @@
+@startuml
+title Diagramme de Cas d'Utilisation - Système d'Enrichissement de Documents Pharmaceutiques
+
+!define BUSINESS_COLOR #E8F4FD
+!define SYSTEM_COLOR #FFF2CC
+!define EXPERT_COLOR #D5E8D4
+!define AI_COLOR #FFE6CC
+
+left to right direction
+
+actor "👨‍💼 Expert\nPharmaceutique" as Expert EXPERT_COLOR
+actor "👤 Métadonneur" as User
+actor "🤖 Système IA" as AI AI_COLOR
+actor "🔧 Administrateur" as Admin
+
+package "📄 Gestion Documents" BUSINESS_COLOR {
+  usecase "Télécharger PDF" as UC1
+  usecase "Visualiser Document" as UC2
+  usecase "Naviguer Pages" as UC3
+  usecase "Sélectionner Texte" as UC4
+  usecase "Gérer Métadonnées" as UC5
+}
+
+package "🔍 Extraction & Annotation" SYSTEM_COLOR {
+  usecase "Extraire Annotations" as UC6
+  usecase "Identifier Entités" as UC7
+  usecase "Détecter Dosages" as UC8
+  usecase "Reconnaître Indications" as UC9
+  usecase "Générer JSON" as UC10
+}
+
+package "🧠 Enrichissement Intelligent" EXPERT_COLOR {
+  usecase "Enrichir Automatiquement" as UC11
+  usecase "Générer Relations" as UC12
+  usecase "Créer Q&A" as UC13
+  usecase "Produire Résumé" as UC14
+  usecase "Comparer IA vs Expert" as UC15
+  usecase "Régénérer avec Apprentissage" as UC16
+}
+
+package "🎨 Créateur Visuel Relations" EXPERT_COLOR {
+  usecase "Ouvrir Interface Visuelle" as UC17
+  usecase "Gérer Entités Canvas" as UC18
+  usecase "Ajouter Entités" as UC19
+  usecase "Créer Nouvelles Entités" as UC20
+  usecase "Positionner Entités" as UC21
+  usecase "Créer Relations" as UC22
+  usecase "Choisir Type Relation" as UC23
+  usecase "Décrire Relation" as UC24
+  usecase "Auto-organiser Canvas" as UC25
+  usecase "Sauvegarder Relations" as UC26
+}
+
+package "❓ Système Q&A" EXPERT_COLOR {
+  usecase "Tester Système Q&A" as UC27
+  usecase "Poser Question" as UC28
+  usecase "Évaluer Réponse" as UC29
+  usecase "Corriger Réponses" as UC30
+  usecase "Ajouter Q&A Manuelles" as UC31
+  usecase "Analyser Paragraphes" as UC32
+  usecase "Extraire Relations Texte" as UC33
+}
+
+package "📊 Apprentissage" EXPERT_COLOR {
+  usecase "Consulter Historique" as UC34
+  usecase "Analyser Améliorations" as UC35
+  usecase "Visualiser Statistiques" as UC36
+  usecase "Enregistrer Patterns" as UC37
+}
+
+package "💾 Gestion Données" EXPERT_COLOR {
+  usecase "Éditer JSON Enrichi" as UC38
+  usecase "Sauvegarder Modifications" as UC39
+  usecase "Exporter Données" as UC40
+  usecase "Gérer Annotations" as UC41
+}
+
+package "🔧 Administration" {
+  usecase "Gérer Utilisateurs" as UC42
+  usecase "Configurer IA" as UC43
+  usecase "Monitorer Performances" as UC44
+}
+
+' Relations Acteurs -> Cas d'utilisation
+
+' Métadonneur
+User --> UC1
+User --> UC2
+User --> UC3
+User --> UC4
+User --> UC5
+
+' Expert (hérite des cas du métadonneur)
+Expert --> UC1
+Expert --> UC2
+Expert --> UC3
+Expert --> UC4
+Expert --> UC5
+
+' Expert spécifique
+Expert --> UC11
+Expert --> UC15
+Expert --> UC16
+Expert --> UC17
+Expert --> UC18
+Expert --> UC22
+Expert --> UC25
+Expert --> UC26
+Expert --> UC27
+Expert --> UC30
+Expert --> UC31
+Expert --> UC32
+Expert --> UC34
+Expert --> UC35
+Expert --> UC38
+Expert --> UC39
+Expert --> UC40
+Expert --> UC41
+
+' Système IA
+AI --> UC6
+AI --> UC7
+AI --> UC8
+AI --> UC9
+AI --> UC10
+AI --> UC12
+AI --> UC13
+AI --> UC14
+AI --> UC24
+AI --> UC29
+AI --> UC33
+AI --> UC37
+
+' Administrateur
+Admin --> UC42
+Admin --> UC43
+Admin --> UC44
+
+' Relations entre cas d'utilisation
+
+' Include relationships
+UC6 .> UC7 : <<include>>
+UC6 .> UC8 : <<include>>
+UC6 .> UC9 : <<include>>
+UC11 .> UC12 : <<include>>
+UC11 .> UC13 : <<include>>
+UC22 .> UC23 : <<include>>
+UC27 .> UC28 : <<include>>
+UC27 .> UC29 : <<include>>
+UC32 .> UC33 : <<include>>
+
+' Extend relationships
+UC30 .> UC27 : <<extend>>
+UC24 .> UC22 : <<extend>>
+UC25 .> UC18 : <<extend>>
+
+' Composition relationships
+UC18 .> UC19 : <<include>>
+UC18 .> UC20 : <<include>>
+UC18 .> UC21 : <<include>>
+
+' Notes explicatives
+note right of Expert : Utilisateur expert avec\ncompétences pharmaceutiques\nspécialisées
+note right of AI : Système automatisé\nbasé sur LLM pour\nl'analyse de documents
+note bottom of UC22 : Cas d'utilisation central\ndu créateur visuel
+note bottom of UC11 : Point d'entrée principal\nde l'enrichissement
+
+@enduml

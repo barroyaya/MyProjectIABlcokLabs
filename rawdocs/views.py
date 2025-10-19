@@ -113,7 +113,8 @@ def is_metadonneur(user):
 
 
 def is_annotateur(user):
-    return user.groups.filter(name="Annotateur").exists()
+    # Les annotateurs ET les experts peuvent annoter
+    return user.groups.filter(name__in=["Annotateur", "Expert"]).exists()
 
 
 def is_expert(user):

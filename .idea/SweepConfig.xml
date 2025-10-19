@@ -14,6 +14,7 @@
         <option value="apply_patch" />
       </set>
     </option>
-    <option name="noEntitiesCache" value="true" />
+    <option name="autocompleteDebounceMs" value="10" />
+    <option name="selectedTemplate" value="Custom" />
   </component>
 </project>

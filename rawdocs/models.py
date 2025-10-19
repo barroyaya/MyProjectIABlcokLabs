@@ -134,6 +134,128 @@ class RawDocument(models.Model):
         """Vérifie si le document contient des annotations"""
         return self.get_total_annotations_count() > 0
 
+    def get_page_relations(self):
+        """Récupère toutes les relations trouvées dans les pages du document"""
+        all_relations = []
+        for page in self.pages.all():
+            if page.regulatory_analysis and 'relations' in page.regulatory_analysis:
+                for relation in page.regulatory_analysis['relations']:
+                    relation['page_number'] = page.page_number
+                    all_relations.append(relation)
+        return all_relations
+
+    def get_semantic_entities(self):
+        """Récupère toutes les entités sémantiques du document"""
+        entities = {}
+        for page in self.pages.all():
+            if page.regulatory_analysis and 'entities' in page.regulatory_analysis:
+                for entity_type, entity_list in page.regulatory_analysis['entities'].items():
+                    if entity_type not in entities:
+                        entities[entity_type] = set()
+                    if isinstance(entity_list, list):
+                        entities[entity_type].update(entity_list)
+
+        # Convertir les sets en listes pour la sérialisation
+        return {k: list(v) for k, v in entities.items()}
+
+    def find_relations_between_pages(self, source_page_number, target_page_number):
+        """Trouve les relations potentielles entre deux pages"""
+        source_page = self.pages.filter(page_number=source_page_number).first()
+        target_page = self.pages.filter(page_number=target_page_number).first()
+
+        if not source_page or not target_page:
+            return []
+
+        cross_page_relations = []
+
+        # Récupérer les entités de chaque page
+        source_entities = source_page.get_all_entities()
+        target_entities = target_page.get_all_entities()
+
+        # Chercher les relations possibles entre les entités des deux pages
+        for source_type, source_values in source_entities.items():
+            for target_type, target_values in target_entities.items():
+                for source_value in source_values:
+                    for target_value in target_values:
+                        # Détecter les relations potentielles basées sur les types d'entités
+                        potential_relation = self._detect_potential_relation(
+                            source_type, source_value, target_type, target_value
+                        )
+                        if potential_relation:
+                            potential_relation['source_page'] = source_page_number
+                            potential_relation['target_page'] = target_page_number
+                            cross_page_relations.append(potential_relation)
+
+        return cross_page_relations
+
+    def _detect_potential_relation(self, source_type, source_value, target_type, target_value):
+        """Détecte une relation potentielle entre deux entités basée sur leurs types"""
+        relation_patterns = {
+            ('product', 'ingredient'): 'contains',
+            ('product', 'organization'): 'manufactured_by',
+            ('product', 'indication'): 'used_for',
+            ('product', 'contraindication'): 'contraindicated_with',
+            ('procedure', 'authority'): 'submitted_to',
+            ('procedure', 'date'): 'due_by',
+            ('regulation', 'authority'): 'issued_by',
+            ('product', 'dosage'): 'has_dosage',
+        }
+
+        key = (source_type.lower(), target_type.lower())
+        if key in relation_patterns:
+            return {
+                'source': {'type': source_type, 'value': source_value},
+                'target': {'type': target_type, 'value': target_value},
+                'type': relation_patterns[key],
+                'confidence': 0.7,  # Confiance modérée car c'est une détection automatique
+                'detected_by': 'pattern_matching'
+            }
+
+        return None
+
+    def get_regulatory_summary(self):
+        """Retourne un résumé consolidé de tous les aspects réglementaires du document"""
+        summary = {
+            'total_pages': self.total_pages,
+            'analyzed_pages': 0,
+            'total_obligations': [],
+            'critical_deadlines': [],
+            'authorities_mentioned': set(),
+            'regulations_referenced': set(),
+            'importance_score': 0
+        }
+
+        for page in self.pages.all():
+            if page.is_regulatory_analyzed:
+                summary['analyzed_pages'] += 1
+
+                # Obligations
+                if page.regulatory_obligations:
+                    summary['total_obligations'].extend(page.regulatory_obligations)
+
+                # Délais critiques
+                if page.critical_deadlines:
+                    summary['critical_deadlines'].extend(page.critical_deadlines)
+
+                # Autorités et régulations
+                if page.regulatory_analysis:
+                    entities = page.regulatory_analysis.get('entities', {})
+                    if 'authorities' in entities:
+                        summary['authorities_mentioned'].update(entities['authorities'])
+                    if 'regulations' in entities:
+                        summary['regulations_referenced'].update(entities['regulations'])
+
+                # Score d'importance
+                summary['importance_score'] += page.regulatory_importance_score
+
+        # Convertir les sets en listes et calculer le score moyen
+        summary['authorities_mentioned'] = list(summary['authorities_mentioned'])
+        summary['regulations_referenced'] = list(summary['regulations_referenced'])
+        if summary['analyzed_pages'] > 0:
+            summary['importance_score'] = summary['importance_score'] // summary['analyzed_pages']
+
+        return summary
+
 
 class MetadataLog(models.Model):
     document = models.ForeignKey('RawDocument', on_delete=models.CASCADE, related_name='logs')
@@ -280,6 +402,75 @@ class DocumentPage(models.Model):
             summary_parts.append(f"🏛️ {len(analysis['authorities'])} autorité(s)")
 
         return " • ".join(summary_parts) if summary_parts else "Aucun élément réglementaire majeur"
+
+    def get_all_entities(self):
+        """Récupère toutes les entités de la page depuis l'analyse réglementaire"""
+        if not self.regulatory_analysis:
+            return {}
+
+        entities = self.regulatory_analysis.get('entities', {})
+        # Nettoyer et standardiser les entités
+        cleaned_entities = {}
+        for entity_type, entity_list in entities.items():
+            if isinstance(entity_list, list) and entity_list:
+                cleaned_entities[entity_type] = entity_list
+
+        return cleaned_entities
+
+    def get_page_relations(self):
+        """Récupère toutes les relations de cette page"""
+        if not self.regulatory_analysis:
+            return []
+
+        return self.regulatory_analysis.get('relations', [])
+
+    def find_entities_by_type(self, entity_type):
+        """Trouve toutes les entités d'un type spécifique sur cette page"""
+        entities = self.get_all_entities()
+        return entities.get(entity_type, [])
+
+    def has_regulatory_content(self):
+        """Vérifie si la page contient du contenu réglementaire significatif"""
+        if not self.regulatory_analysis:
+            return False
+
+        analysis = self.regulatory_analysis
+        has_content = (
+            len(analysis.get('obligations', [])) > 0 or
+            len(analysis.get('relations', [])) > 0 or
+            any(len(v) > 0 for v in analysis.get('entities', {}).values() if isinstance(v, list))
+        )
+
+        return has_content
+
+    def get_linked_pages(self, document):
+        """Trouve les pages liées à cette page via des relations"""
+        linked_pages = set()
+
+        if not self.regulatory_analysis:
+            return []
+
+        # Récupérer toutes les entités de cette page
+        my_entities = self.get_all_entities()
+        my_entity_values = set()
+        for entity_list in my_entities.values():
+            if isinstance(entity_list, list):
+                my_entity_values.update(entity_list)
+
+        # Parcourir toutes les autres pages du document
+        for other_page in document.pages.exclude(id=self.id):
+            if other_page.regulatory_analysis:
+                other_entities = other_page.get_all_entities()
+                other_entity_values = set()
+                for entity_list in other_entities.values():
+                    if isinstance(entity_list, list):
+                        other_entity_values.update(entity_list)
+
+                # Si il y a des entités communes, les pages sont liées
+                if my_entity_values & other_entity_values:
+                    linked_pages.add(other_page.page_number)
+
+        return sorted(list(linked_pages))
 
 
 class DocumentRegulatoryAnalysis(models.Model):

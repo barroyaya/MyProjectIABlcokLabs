@@ -1,4 +1,4 @@
-# # rawdocs/groq_annotation_system.py
+﻿# # rawdocs/groq_annotation_system.py
 # from django.shortcuts import render, get_object_or_404
 # from django.http import JsonResponse
 # from django.contrib.auth.decorators import login_required
@@ -360,7 +360,7 @@ class GroqAnnotator:
         self._api_healthy: Optional[bool] = None
 
         if self.enabled:
-            print(f"🔍 Analyseur réglementaire GROQ initialisé (model: {self.model})")
+            print(f"[INFO] Analyseur reglementaire GROQ initialise (model: {self.model})")
             try:
                 self.test_connection()
             except Exception as e:

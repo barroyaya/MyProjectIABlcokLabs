@@ -1,0 +1,288 @@
+@startuml Architecture - Flux Metadonneur vers Expert
+
+!define RECTANGLE_COLOR #E3F2FD
+!define DATABASE_COLOR #FFF9C4
+!define EXTERNAL_COLOR #FFCCBC
+!define PROCESS_COLOR #C8E6C9
+
+skinparam componentStyle rectangle
+skinparam backgroundColor white
+skinparam defaultTextAlignment center
+
+title Diagramme de Composants - Système d'Analyse de Documents\nFlux: Metadonneur → Expert
+
+' ============================================
+' ACTEURS
+' ============================================
+actor "Metadonneur\n(Data Provider)" as DataProvider #LightBlue
+actor "Expert\n(Analyste)" as Expert #LightGreen
+
+' ============================================
+' COUCHE PRÉSENTATION (Frontend)
+' ============================================
+package "Couche Présentation (Frontend)" #RECTANGLE_COLOR {
+    component "Interface Metadonneur" as MetaUI {
+        [Formulaire Upload\nDocuments PDF]
+        [Éditeur Annotations\nJSON]
+        [Gestion Relations\nSémantiques]
+    }
+
+    component "Interface Expert" as ExpertUI {
+        [Dashboard\nDocuments Validés]
+        [Sélecteur Pages\nPDF]
+        [Viewer PDF\n(Canvas + Zoom)]
+        [Affichage Relations\n(Tables + Stats)]
+        [Éditeur Monaco\n(JSON)]
+    }
+
+    component "JavaScript Client" as JSClient {
+        [State Management\n(selectedDocument,\nselectedPages)]
+        [Fetch API\n(HTTP Requests)]
+        [PDF Rendering\n(Progressive Loading)]
+        [Modal System\n(Bootstrap)]
+        [Event Handlers\n(Clicks, Selection)]
+    }
+}
+
+' ============================================
+' COUCHE APPLICATION (Backend Django)
+' ============================================
+package "Couche Application (Backend Django)" #PROCESS_COLOR {
+    component "Views (Controllers)" as Views {
+        [view_document_annotation\n_json_enriched()]
+        [get_validated_documents()]
+        [get_document_pages()]
+        [analyze_document_pages()]
+        [get_page_image()]
+    }
+
+    component "Services Métier" as Services {
+        [DocumentService\n(CRUD Documents)]
+        [ValidationService\n(Validation Workflow)]
+        [PDFService\n(PyMuPDF/fitz 1.23.5)]
+        [RelationExtractor\n(LLM Integration)]
+        [AnnotationEnricher\n(JSON Processing)]
+    }
+
+    component "Authentification" as Auth {
+        [Django Auth\nMiddleware]
+        [Permissions\n(Expert Role)]
+    }
+}
+
+' ============================================
+' COUCHE DONNÉES
+' ============================================
+package "Couche Données (Storage)" #DATABASE_COLOR {
+    database "Base de Données\n(PostgreSQL/SQLite)" as DB {
+        [Table: Documents\n(id, title, created_at,\npdf_file_exists)]
+        [Table: Annotations\n(id, document_id,\npage_num, json_data)]
+        [Table: Relations\n(id, source, target,\ntype, confidence)]
+        [Table: ValidationStatus\n(document_id, validated,\nvalidated_at)]
+    }
+
+    storage "Système de Fichiers" as FileSystem {
+        folder "media/documents/" {
+            file "document_1.pdf"
+            file "document_2.pdf"
+            file "..."
+            note right
+                78 documents validés
+                31 fichiers PDF physiques
+            end note
+        }
+
+        folder "media/page_images/" {
+            file "doc1_page1.png"
+            file "doc1_page2.png"
+            file "..."
+        }
+    }
+}
+
+' ============================================
+' SERVICES EXTERNES
+' ============================================
+package "Services Externes" #EXTERNAL_COLOR {
+    component "Groq API" as GroqAPI {
+        [LLM: llama-3.3-70b\n-versatile]
+        [Extraction Relations\nSémantiques]
+        [Prompt Engineering\n(Context + Instructions)]
+    }
+
+    component "PyMuPDF (fitz)" as PyMuPDF {
+        [Lecture PDF]
+        [Extraction Texte\npar Page]
+        [Conversion\nPDF → PNG]
+        [Gestion Zoom\n& Résolution]
+    }
+}
+
+' ============================================
+' FLUX 1: METADONNEUR → SYSTÈME
+' ============================================
+DataProvider -down-> MetaUI : "1. Upload PDF\n+ Annotations"
+MetaUI -down-> JSClient : "2. Submit Form"
+JSClient -down-> Views : "3. POST /upload"
+Views -down-> Services : "4. Process Upload"
+Services -down-> DB : "5. Save Metadata"
+Services -down-> FileSystem : "6. Store PDF File"
+
+note right of Services
+    **Validation initiale**
+    - Vérification format PDF
+    - Validation JSON annotations
+    - Calcul pdf_file_exists flag
+end note
+
+' ============================================
+' FLUX 2: PROCESSUS DE VALIDATION
+' ============================================
+Services -[hidden]down-> DB
+DB -right-> Services : "7. Fetch Pending\nDocuments"
+Services -right-> Views : "8. Validation\nWorkflow"
+
+note on link
+    **Critères de validation:**
+    - Complétude annotations
+    - Qualité relations
+    - Cohérence sémantique
+end note
+
+' ============================================
+' FLUX 3: EXPERT → ANALYSE
+' ============================================
+Expert -down-> ExpertUI : "9. Access Interface\n'Analyser Documents Validés'"
+ExpertUI -down-> JSClient : "10. showDocumentPageAnalysis()"
+
+JSClient -down-> Views : "11. GET /get_validated_documents"
+Views -down-> Services : "12. Query Validated Docs"
+Services -down-> DB : "13. SELECT * WHERE validated=True"
+DB -up-> Services : "14. Return 78 documents\n(with pdf_file_exists flag)"
+Services -up-> Views : "15. Document List"
+Views -up-> JSClient : "16. JSON Response"
+JSClient -up-> ExpertUI : "17. Display Document Cards\n(with badges)"
+
+Expert -down-> ExpertUI : "18. Select Document\n+ Select Pages (1-N)"
+ExpertUI -down-> JSClient : "19. selectDocument(docId)\n+ togglePageSelection(pageNum)"
+
+JSClient -down-> Views : "20. GET /get_document_pages/{id}"
+Views -down-> Services : "21. Get Page Info"
+Services -down-> DB : "22. Count pages"
+DB -up-> Services : "23. Page metadata"
+Services -up-> Views : "24. Page list"
+Views -up-> JSClient : "25. JSON: pages info"
+JSClient -up-> ExpertUI : "26. Display Page\nCheckboxes"
+
+' ============================================
+' FLUX 4: ANALYSE PAR LLM
+' ============================================
+Expert -down-> ExpertUI : "27. Click 'Analyser\nX page(s)'"
+ExpertUI -down-> JSClient : "28. analyzeSelectedPages()"
+
+JSClient -down-> Views : "29. POST /analyze_document_pages\n{doc_id, page_nums: [1,3,5]}"
+Views -down-> Services : "30. RelationExtractor\n.analyze_pages()"
+
+Services -down-> PyMuPDF : "31. Extract text\nfrom pages"
+PyMuPDF -down-> FileSystem : "32. Read PDF file"
+FileSystem -up-> PyMuPDF : "33. PDF binary data"
+PyMuPDF -up-> Services : "34. Text per page\n{page: 1, text: '...'}"
+
+Services -right-> GroqAPI : "35. POST /chat/completions\n{model, messages: [...],\ntext per page}"
+
+note right of GroqAPI
+    **Prompt Structure:**
+    - System: "Tu es un expert..."
+    - User: "Extrais les relations
+      sémantiques du texte suivant:
+      [page_text]"
+    - Response format: JSON
+end note
+
+GroqAPI -left-> Services : "36. JSON Response\n{relations: [{source,\ntarget, type, confidence}]}"
+
+Services -down-> DB : "37. Save Relations\n(per page)"
+DB -up-> Services : "38. Relations saved"
+
+Services -up-> Views : "39. Analysis Results\n{page_results: [...]}"
+Views -up-> JSClient : "40. JSON Response"
+
+' ============================================
+' FLUX 5: AFFICHAGE RÉSULTATS
+' ============================================
+JSClient -down-> ExpertUI : "41. displayAnalysisResults(data)"
+
+ExpertUI -down-> JSClient : "42. Request page images\n(progressive loading)"
+
+JSClient -down-> Views : "43. GET /get_page_image\n/{doc_id}/{page_num}"
+Views -down-> Services : "44. PDFService\n.render_page_to_png()"
+
+Services -down-> PyMuPDF : "45. Convert page to PNG\n(with zoom level)"
+PyMuPDF -down-> FileSystem : "46. Read PDF"
+FileSystem -up-> PyMuPDF : "47. PDF data"
+PyMuPDF -down-> FileSystem : "48. Cache PNG image"
+PyMuPDF -up-> Services : "49. PNG binary"
+
+Services -up-> Views : "50. Image response\n(content-type: image/png)"
+Views -up-> JSClient : "51. PNG image"
+JSClient -up-> ExpertUI : "52. Display in canvas\n(PDF panel)"
+
+ExpertUI -up-> Expert : "53. View Results:\n- PDF pages (left)\n- Relations tables (right)\n- Stats + Export JSON"
+
+' ============================================
+' FLUX 6: EXPORT & SAUVEGARDE
+' ============================================
+Expert -down-> ExpertUI : "54. Export Results / Edit"
+ExpertUI -down-> JSClient : "55. exportAnalysisResults() /\neditRelation()"
+JSClient -down-> Views : "56. POST /save_analysis\n/{doc_id}"
+Views -down-> Services : "57. Update Annotations"
+Services -down-> DB : "58. UPDATE annotations\nSET json_data=..."
+
+' ============================================
+' NOTES ADDITIONNELLES
+' ============================================
+note bottom of FileSystem
+    **Gestion des fichiers manquants:**
+    - pdf_file_exists flag vérifié
+    - Fallback: relations only (no PDF)
+    - Grid adapté (1 colonne si pas de PDF)
+end note
+
+note bottom of JSClient
+    **State Management:**
+    - selectedDocument
+    - selectedPages (array)
+    - pdfZoomLevels (per page)
+    - analysisResults
+
+    **Validation:**
+    - 30+ validation checks
+    - 50+ console logs
+    - Try-catch partout
+end note
+
+note bottom of GroqAPI
+    **Rate Limiting & Performance:**
+    - Progressive loading (200ms delay)
+    - Analyze multiple pages per request
+    - Cache results in database
+    - Fallback if API unavailable
+end note
+
+legend right
+    |= Symbole |= Description |
+    | <size:14><color:#E3F2FD>█</color></size> | Frontend (HTML/JS/CSS) |
+    | <size:14><color:#C8E6C9>█</color></size> | Backend (Django Python) |
+    | <size:14><color:#FFF9C4>█</color></size> | Données (DB + Files) |
+    | <size:14><color:#FFCCBC>█</color></size> | Services Externes |
+
+    **Technologies:**
+    - Django 4.x (Backend)
+    - Bootstrap 5.3.0 (UI)
+    - Monaco Editor (JSON)
+    - PyMuPDF/fitz 1.23.5 (PDF)
+    - Groq API (LLM)
+    - JavaScript ES6+ (Client)
+endlegend
+
+@enduml

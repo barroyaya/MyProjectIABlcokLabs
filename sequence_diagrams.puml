@@ -1,0 +1,788 @@
+@startuml sequence_upload_document
+title Séquence 1: Téléchargement et Traitement Initial d'un Document
+
+actor "👤 Métadonneur" as User
+participant "Document" as Doc
+participant "ServiceExtraction" as Extract
+participant "SystemeIA" as IA
+participant "DetecteurEntites" as Detecteur
+participant "GenerateurJSON" as GenJSON
+participant "GestionnaireDonnees" as GD
+database "Repository" as Repo
+
+User -> Doc : telechargerPDF(fichier)
+activate Doc
+
+Doc -> Doc : validerFormat()
+Doc -> Doc : extrairePages()
+Doc -> GD : sauvegarder(document)
+activate GD
+GD -> Repo : save(document)
+activate Repo
+Repo --> GD : success
+deactivate Repo
+GD --> Doc : documentId
+deactivate GD
+
+User -> Extract : traiterDocument(doc)
+activate Extract
+
+Extract -> IA : initialiser()
+activate IA
+IA -> IA : chargerModele()
+IA --> Extract : prêt
+deactivate IA
+
+loop pour chaque page
+  Extract -> Doc : extrairePage(numero)
+  Doc --> Extract : page
+
+  Extract -> Detecteur : extraireEntites(page)
+  activate Detecteur
+  Detecteur -> IA : predire(texte)
+  activate IA
+  IA --> Detecteur : entites
+  deactivate IA
+  Detecteur --> Extract : List<Entite>
+  deactivate Detecteur
+
+  Extract -> Extract : detecterDosages(page)
+  Extract -> Extract : reconnaitreIndications(page)
+end
+
+Extract -> GenJSON : genererJSON(annotations)
+activate GenJSON
+GenJSON --> Extract : jsonResult
+deactivate GenJSON
+
+Extract -> GD : sauvegarder(annotations)
+activate GD
+GD -> Repo : save(annotations)
+Repo --> GD : success
+GD --> Extract : success
+deactivate GD
+
+Extract --> User : ResultatExtraction
+deactivate Extract
+deactivate Doc
+
+@enduml
+
+@startuml sequence_enrichissement_auto
+title Séquence 2: Enrichissement Automatique par l'IA
+
+actor "👨‍💼 Expert\nPharmaceutique" as Expert
+participant "ServiceEnrichissement" as Service
+participant "SystemeIA" as IA
+participant "AnalyseurTexte" as Analyseur
+participant "DocumentEnrichi" as DocEnr
+participant "Relation" as Rel
+participant "SystemeQA" as QA
+participant "Resume" as Res
+participant "GestionnaireDonnees" as GD
+
+Expert -> Service : enrichirAutomatiquement(docId)
+activate Service
+
+Service -> GD : charger(docId, Document)
+activate GD
+GD --> Service : document
+deactivate GD
+
+Service -> IA : traiterDocument(doc)
+activate IA
+
+' Génération des relations
+IA -> Analyseur : extraireRelations(texte)
+activate Analyseur
+Analyseur -> Analyseur : analyserParagraphes()
+Analyseur -> Analyseur : identifierMotsCles()
+Analyseur --> IA : List<Relation>
+deactivate Analyseur
+
+IA -> Rel : new Relation(source, cible, type)
+activate Rel
+Rel -> Rel : calculerConfiance()
+Rel --> IA : relation
+deactivate Rel
+
+' Génération Q&A
+IA -> QA : creerQA(document)
+activate QA
+loop pour chaque paragraphe pertinent
+  QA -> Analyseur : analyserParagraphe(texte)
+  activate Analyseur
+  Analyseur --> QA : question, reponse
+  deactivate Analyseur
+  QA -> QA : evaluerPertinence()
+end
+QA --> IA : List<QA>
+deactivate QA
+
+' Génération résumé
+IA -> Res : generer(document)
+activate Res
+Res -> Res : extrairePointsCles()
+Res -> Res : structurerSections()
+Res --> IA : resume
+deactivate Res
+
+IA --> Service : enrichissementResult
+deactivate IA
+
+' Création document enrichi
+Service -> DocEnr : new DocumentEnrichi()
+activate DocEnr
+DocEnr -> DocEnr : ajouterRelations(relations)
+DocEnr -> DocEnr : ajouterQA(qas)
+DocEnr -> DocEnr : ajouterResume(resume)
+DocEnr -> DocEnr : calculerScore()
+
+Service -> GD : sauvegarder(docEnrichi)
+activate GD
+GD --> Service : success
+deactivate GD
+
+DocEnr --> Service : documentEnrichi
+deactivate DocEnr
+
+Service --> Expert : DocumentEnrichi
+deactivate Service
+
+@enduml
+
+@startuml sequence_createur_visuel
+title Séquence 3: Création de Relations via Interface Visuelle
+
+actor "👨‍💼 Expert\nPharmaceutique" as Expert
+participant "GestionnaireCanvas" as Manager
+participant "Canvas" as Canvas
+participant "NoeudEntite" as Noeud
+participant "Entite" as Ent
+participant "LienRelation" as Lien
+participant "Relation" as Rel
+participant "GestionnaireDonnees" as GD
+
+Expert -> Manager : ouvrirInterfaceVisuelle(docId)
+activate Manager
+
+Manager -> Canvas : creerCanvas(docId)
+activate Canvas
+
+Manager -> GD : charger(docId, DocumentEnrichi)
+activate GD
+GD --> Manager : documentEnrichi
+deactivate GD
+
+' Charger les entités existantes
+loop pour chaque entité existante
+  Manager -> Noeud : new NoeudEntite(entite)
+  activate Noeud
+  Noeud -> Noeud : definirPosition()
+  Noeud -> Noeud : definirForme()
+  Noeud --> Manager : noeud
+  deactivate Noeud
+
+  Manager -> Canvas : ajouterElement(noeud)
+end
+
+Manager --> Expert : canvas
+deactivate Manager
+
+' Expert ajoute une nouvelle entité
+Expert -> Canvas : ajouterNouvelleEntite()
+activate Canvas
+
+Canvas -> Ent : new Entite(nom, categorie)
+activate Ent
+Ent --> Canvas : entite
+deactivate Ent
+
+Canvas -> Noeud : new NoeudEntite(entite)
+activate Noeud
+Noeud --> Canvas : noeud
+deactivate Noeud
+
+Canvas -> Canvas : ajouterElement(noeud)
+Canvas --> Expert : noeudCree
+
+' Expert positionne l'entité
+Expert -> Noeud : deplacer(x, y)
+activate Noeud
+Noeud -> Noeud : positionX = x
+Noeud -> Noeud : positionY = y
+Noeud --> Expert : positioned
+deactivate Noeud
+
+' Expert crée une relation
+Expert -> Canvas : creerRelation(noeudSource, noeudCible)
+
+Canvas -> Expert : choisirTypeRelation()
+Expert --> Canvas : typeRelation
+
+Canvas -> Rel : new Relation(source, cible, type)
+activate Rel
+Rel -> Rel : definirConfiance()
+Rel --> Canvas : relation
+deactivate Rel
+
+Canvas -> Lien : new LienRelation(relation, noeudSource, noeudCible)
+activate Lien
+Lien -> Lien : definirStyle()
+Lien --> Canvas : lien
+deactivate Lien
+
+Canvas -> Canvas : ajouterElement(lien)
+Canvas --> Expert : relationCreee
+
+' Expert demande auto-organisation
+Expert -> Canvas : autoOrganiser()
+Canvas -> Canvas : calculerPositionsOptimales()
+Canvas -> Canvas : animer()
+Canvas --> Expert : reorganise
+
+' Sauvegarde
+Expert -> Canvas : sauvegarder()
+Canvas -> GD : sauvegarderCanvas(canvas)
+activate GD
+GD --> Canvas : success
+deactivate GD
+
+Canvas --> Expert : sauvegarde_reussie
+deactivate Canvas
+
+@enduml
+
+@startuml sequence_qa_system
+title Séquence 4: Système Q&A - Poser Question et Corriger
+
+actor "👨‍💼 Expert\nPharmaceutique" as Expert
+participant "SystemeQA" as QA
+participant "AnalyseurTexte" as Analyseur
+participant "SystemeIA" as IA
+participant "Reponse" as Rep
+participant "EvaluateurReponse" as Eval
+participant "Evaluation" as Evaluat
+participant "Correction" as Corr
+participant "SystemeApprentissage" as Apprent
+participant "GestionnaireDonnees" as GD
+
+' Poser une question
+Expert -> QA : poserQuestion(question, document)
+activate QA
+
+QA -> Analyseur : analyserParagraphes(document)
+activate Analyseur
+Analyseur --> QA : paragraphesRelevants
+deactivate Analyseur
+
+QA -> IA : genererReponse(question, contexte)
+activate IA
+IA -> IA : predire(question + contexte)
+IA --> QA : texteReponse
+deactivate IA
+
+QA -> Rep : new Reponse(texte, sources)
+activate Rep
+Rep -> Rep : calculerConfiance()
+Rep --> QA : reponse
+deactivate Rep
+
+QA --> Expert : Reponse
+
+' Évaluation automatique
+QA -> Eval : evaluerReponse(qa)
+activate Eval
+Eval -> Eval : calculerScore()
+Eval -> Eval : analyserPertinence()
+Eval -> Eval : verifierCompletude()
+
+Eval -> Evaluat : new Evaluation(scores)
+activate Evaluat
+Evaluat --> Eval : evaluation
+deactivate Evaluat
+
+Eval --> QA : evaluation
+deactivate Eval
+
+QA --> Expert : Evaluation
+
+' Expert corrige la réponse
+Expert -> QA : corrigerReponse(qaId, nouvelleReponse)
+
+QA -> Corr : new Correction(qa, reponseCorrigee)
+activate Corr
+
+Corr -> Corr : enregistrerMotif()
+Corr -> Corr : horodater()
+
+Corr -> QA : appliquer()
+activate QA #LightBlue
+QA -> QA : mettreAJourQA()
+QA --> Corr : appliquee
+deactivate QA
+
+Corr -> GD : sauvegarder(correction)
+activate GD
+GD --> Corr : success
+deactivate GD
+
+' Apprentissage
+Corr -> Apprent : enregistrerCorrection(correction)
+activate Apprent
+Apprent -> Apprent : analyserCorrection()
+Apprent -> Apprent : extrairePattern()
+Apprent -> Apprent : mettreAJourModele()
+Apprent --> Corr : apprentissage_enregistre
+deactivate Apprent
+
+Corr --> Expert : correction_appliquee
+deactivate Corr
+deactivate QA
+
+@enduml
+
+@startuml sequence_apprentissage
+title Séquence 5: Apprentissage à partir des Corrections Expertes
+
+actor "👨‍💼 Expert\nPharmaceutique" as Expert
+participant "SystemeApprentissage" as Apprent
+participant "Historique" as Hist
+participant "Pattern" as Pat
+participant "AnalyseAmelioration" as Analyse
+participant "Statistiques" as Stats
+participant "SystemeIA" as IA
+participant "ModeleNLP" as Modele
+participant "GestionnaireDonnees" as GD
+
+' Enregistrement d'une action
+Expert -> Apprent : enregistrerAction(action)
+activate Apprent
+
+Apprent -> Hist : new Historique(action)
+activate Hist
+Hist -> Hist : horodater()
+Hist -> Hist : capturer(avant, apres)
+Hist --> Apprent : historique
+deactivate Hist
+
+Apprent -> GD : sauvegarder(historique)
+activate GD
+GD --> Apprent : success
+deactivate GD
+
+Apprent --> Expert : action_enregistree
+deactivate Apprent
+
+' Analyse périodique des améliorations
+Expert -> Apprent : analyserAmeliorations()
+activate Apprent
+
+Apprent -> Stats : calculer()
+activate Stats
+loop pour chaque type d'action
+  Stats -> Hist : obtenirHistorique(type)
+  activate Hist
+  Hist --> Stats : actions
+  deactivate Hist
+  Stats -> Stats : calculerTauxPrecision()
+  Stats -> Stats : analyserTempsTraitement()
+end
+Stats --> Apprent : statistiques
+deactivate Stats
+
+Apprent -> Analyse : new AnalyseAmelioration(stats)
+activate Analyse
+Analyse -> Analyse : identifierTendances()
+Analyse -> Analyse : genererRecommandations()
+Analyse --> Apprent : analyse
+deactivate Analyse
+
+Apprent --> Expert : AnalyseAmelioration
+deactivate Apprent
+
+' Extraction des patterns
+Expert -> Apprent : extrairePatterns()
+activate Apprent
+
+loop pour chaque groupe de corrections similaires
+  Apprent -> Apprent : regrouper(corrections)
+  Apprent -> Apprent : analyserSimilarites()
+
+  Apprent -> Pat : new Pattern(conditions, actions)
+  activate Pat
+  Pat -> Pat : calculerFiabilite()
+  Pat -> Pat : definirFrequence()
+  Pat --> Apprent : pattern
+  deactivate Pat
+
+  Apprent -> GD : sauvegarder(pattern)
+  activate GD
+  GD --> Apprent : success
+  deactivate GD
+end
+
+Apprent --> Expert : List<Pattern>
+
+' Application de l'apprentissage au modèle IA
+Expert -> Apprent : appliquerApprentissage()
+
+Apprent -> IA : apprendreDeCorrections(corrections)
+activate IA
+
+IA -> Modele : affiner(donnees)
+activate Modele
+Modele -> Modele : ajusterParametres()
+Modele -> Modele : entrainerIncremental()
+Modele --> IA : modele_affine
+deactivate Modele
+
+IA -> IA : validerPerformances()
+IA --> Apprent : apprentissage_applique
+deactivate IA
+
+Apprent -> GD : sauvegarderConfiguration(IA)
+activate GD
+GD --> Apprent : success
+deactivate GD
+
+Apprent --> Expert : apprentissage_termine
+deactivate Apprent
+
+@enduml
+
+@startuml sequence_comparaison_ia_expert
+title Séquence 6: Comparaison IA vs Expert et Régénération
+
+actor "👨‍💼 Expert\nPharmaceutique" as Expert
+participant "ServiceEnrichissement" as Service
+participant "SystemeIA" as IA
+participant "DocumentEnrichi" as DocIA
+participant "DocumentEnrichi" as DocExpert
+participant "Comparaison" as Comp
+participant "Difference" as Diff
+participant "SystemeApprentissage" as Apprent
+participant "GestionnaireDonnees" as GD
+
+' L'expert demande une comparaison
+Expert -> Service : comparerIAvsExpert(docId)
+activate Service
+
+' Charger la version IA
+Service -> GD : charger(docId, "version_ia")
+activate GD
+GD --> Service : documentIA
+deactivate GD
+
+' Charger la version Expert
+Service -> GD : charger(docId, "version_expert")
+activate GD
+GD --> Service : documentExpert
+deactivate GD
+
+' Créer la comparaison
+Service -> Comp : new Comparaison(versionIA, versionExpert)
+activate Comp
+
+Comp -> Comp : calculerDifferences()
+activate Comp #LightBlue
+
+' Comparer les relations
+loop pour chaque relation IA
+  Comp -> DocExpert : rechercherRelationSimilaire(relation)
+  activate DocExpert
+  DocExpert --> Comp : relationTrouvee
+  deactivate DocExpert
+
+  alt relation non trouvée
+    Comp -> Diff : new Difference(RELATION_MANQUANTE)
+    activate Diff
+    Diff --> Comp : difference
+    deactivate Diff
+  else relation différente
+    Comp -> Diff : new Difference(RELATION_MODIFIEE)
+    activate Diff
+    Diff --> Comp : difference
+    deactivate Diff
+  end
+end
+
+' Comparer les Q&A
+loop pour chaque QA IA
+  Comp -> DocExpert : rechercherQASimilaire(qa)
+  activate DocExpert
+  DocExpert --> Comp : qaTrouvee
+  deactivate DocExpert
+
+  alt réponse incorrecte
+    Comp -> Diff : new Difference(QA_INCORRECTE)
+    activate Diff
+    Diff --> Comp : difference
+    deactivate Diff
+  end
+end
+
+' Comparer les entités et dosages
+Comp -> Comp : comparerEntites()
+Comp -> Comp : comparerDosages()
+
+deactivate Comp
+
+Comp -> Comp : calculerScoreCorrelation()
+Comp -> Comp : genererRapport()
+
+Comp --> Service : comparaison
+deactivate Comp
+
+Service --> Expert : Comparaison
+
+' Expert décide de régénérer avec apprentissage
+Expert -> Service : regenererAvecApprentissage(docId)
+
+Service -> Apprent : obtenirPatterns(docId)
+activate Apprent
+Apprent --> Service : patterns
+deactivate Apprent
+
+Service -> IA : traiterDocument(doc, patterns)
+activate IA
+
+IA -> IA : appliquerPatterns()
+IA -> IA : ajusterAvecCorrections()
+IA -> IA : genererEnrichissement()
+
+IA --> Service : nouveauEnrichissement
+deactivate IA
+
+Service -> DocIA : new DocumentEnrichi(nouveauEnrichissement)
+activate DocIA
+DocIA -> DocIA : calculerScore()
+DocIA --> Service : documentRegenere
+deactivate DocIA
+
+Service -> GD : sauvegarder(documentRegenere)
+activate GD
+GD --> Service : success
+deactivate GD
+
+' Enregistrer l'action de régénération
+Service -> Apprent : enregistrerAction(REGENERATION)
+activate Apprent
+Apprent --> Service : enregistre
+deactivate Apprent
+
+Service --> Expert : DocumentRegenere
+deactivate Service
+
+@enduml
+
+@startuml sequence_export_donnees
+title Séquence 7: Édition JSON et Export des Données
+
+actor "👨‍💼 Expert\nPharmaceutique" as Expert
+participant "EditeurJSON" as Editeur
+participant "DocumentEnrichi" as DocEnr
+participant "JSONValidator" as Validator
+participant "GestionnaireDonnees" as GD
+participant "Exportateur" as Export
+database "Repository" as Repo
+
+' Édition du JSON enrichi
+Expert -> Editeur : editerJSONEnrichi(docId)
+activate Editeur
+
+Editeur -> GD : charger(docId, DocumentEnrichi)
+activate GD
+GD -> Repo : findById(docId)
+activate Repo
+Repo --> GD : documentEnrichi
+deactivate Repo
+GD --> Editeur : documentEnrichi
+deactivate GD
+
+Editeur -> DocEnr : obtenirJSON()
+activate DocEnr
+DocEnr --> Editeur : jsonString
+deactivate DocEnr
+
+Editeur -> Editeur : formater(json)
+Editeur --> Expert : jsonFormate
+
+' Expert modifie le JSON
+Expert -> Editeur : modifierJSON(nouveauJSON)
+
+Editeur -> Validator : valider(nouveauJSON)
+activate Validator
+Validator -> Validator : verifierSchema()
+Validator -> Validator : verifierCoherence()
+
+alt JSON valide
+  Validator --> Editeur : valide
+
+  Editeur -> DocEnr : mettreAJour(nouveauJSON)
+  activate DocEnr
+  DocEnr -> DocEnr : parserJSON()
+  DocEnr -> DocEnr : mettreAJourRelations()
+  DocEnr -> DocEnr : mettreAJourQA()
+  DocEnr --> Editeur : mis_a_jour
+  deactivate DocEnr
+
+  Editeur -> GD : sauvegarder(documentEnrichi)
+  activate GD
+  GD -> Repo : update(documentEnrichi)
+  activate Repo
+  Repo --> GD : success
+  deactivate Repo
+  GD --> Editeur : success
+  deactivate GD
+
+  Editeur --> Expert : modification_reussie
+
+else JSON invalide
+  Validator --> Editeur : erreurs
+  Editeur --> Expert : erreurs_validation
+end
+deactivate Validator
+
+deactivate Editeur
+
+' Export des données
+Expert -> Export : exporterDonnees(docId, format)
+activate Export
+
+Export -> GD : charger(docId, DocumentEnrichi)
+activate GD
+GD --> Export : documentEnrichi
+deactivate GD
+
+alt format = JSON
+  Export -> Export : exporterJSON(doc)
+else format = XML
+  Export -> Export : exporterXML(doc)
+else format = CSV
+  Export -> Export : exporterCSV(doc)
+else format = PDF
+  Export -> Export : exporterPDF(doc)
+else format = EXCEL
+  Export -> Export : exporterExcel(doc)
+end
+
+Export -> Export : creerFichier()
+Export --> Expert : fichierExporte
+
+deactivate Export
+
+@enduml
+
+@startuml sequence_administration
+title Séquence 8: Administration du Système
+
+actor "🔧 Administrateur" as Admin
+participant "GestionnaireUtilisateurs" as GestUser
+participant "Utilisateur" as User
+participant "SystemeIA" as IA
+participant "ConfigurationIA" as Config
+participant "MoniteurPerformances" as Monitor
+participant "Statistiques" as Stats
+participant "GestionnaireDonnees" as GD
+database "Repository" as Repo
+
+' Gestion des utilisateurs
+Admin -> GestUser : ajouterUtilisateur(user)
+activate GestUser
+
+GestUser -> User : new Utilisateur(nom, email)
+activate User
+User -> User : genererMotDePasse()
+User -> User : definirPermissions()
+User --> GestUser : utilisateur
+deactivate User
+
+GestUser -> GD : sauvegarder(utilisateur)
+activate GD
+GD -> Repo : save(utilisateur)
+activate Repo
+Repo --> GD : success
+deactivate Repo
+GD --> GestUser : userId
+deactivate GD
+
+GestUser --> Admin : utilisateur_cree
+deactivate GestUser
+
+' Configuration de l'IA
+Admin -> Config : configurerIA(parametres)
+activate Config
+
+Config -> Config : validerParametres()
+
+alt paramètres valides
+  Config -> Config : temperature = parametres.temperature
+  Config -> Config : maxTokens = parametres.maxTokens
+  Config -> Config : seuilConfiance = parametres.seuilConfiance
+
+  Config -> IA : appliquerConfiguration(config)
+  activate IA
+  IA -> IA : reinitialiser()
+  IA -> IA : chargerModele(config.modele)
+  IA --> Config : configuration_appliquee
+  deactivate IA
+
+  Config -> GD : sauvegarder(configuration)
+  activate GD
+  GD --> Config : success
+  deactivate GD
+
+  Config --> Admin : configuration_reussie
+
+else paramètres invalides
+  Config --> Admin : erreurs_validation
+end
+deactivate Config
+
+' Monitoring des performances
+Admin -> Monitor : monitorerPerformances()
+activate Monitor
+
+Monitor -> Stats : calculer()
+activate Stats
+
+loop pour chaque métrique
+  Stats -> Repo : obtenirDonnees(metrique)
+  activate Repo
+  Repo --> Stats : donnees
+  deactivate Repo
+
+  Stats -> Stats : calculerMoyenne()
+  Stats -> Stats : calculerTendance()
+end
+
+Stats -> Stats : genererRapport()
+Stats --> Monitor : statistiques
+deactivate Stats
+
+Monitor -> Monitor : analyserPerformances()
+Monitor -> Monitor : detecterAnomalies()
+
+alt anomalie détectée
+  Monitor -> Monitor : genererAlerte()
+  Monitor --> Admin : alerte + statistiques
+else normal
+  Monitor --> Admin : statistiques
+end
+
+deactivate Monitor
+
+' Consultation de l'historique système
+Admin -> GD : obtenirHistoriqueSysteme()
+activate GD
+
+GD -> Repo : findAll(Historique)
+activate Repo
+Repo --> GD : historiques
+deactivate Repo
+
+GD --> Admin : List<Historique>
+deactivate GD
+
+@enduml
